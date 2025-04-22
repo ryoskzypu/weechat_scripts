@@ -1,3 +1,25 @@
+# SPDX-FileCopyrightText: 2025 ryoskzypu <ryoskzypu@proton.me>
+#
+# SPDX-License-Identifier: MIT-0
+#
+# License:
+#   MIT No Attribution
+#
+#   Copyright (c) 2025 ryoskzypu <ryoskzypu@proton.me>
+#
+#   Permission is hereby granted, free of charge, to any person obtaining a copy of this
+#   software and associated documentation files (the "Software"), to deal in the Software
+#   without restriction, including without limitation the rights to use, copy, modify,
+#   merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+#   permit persons to whom the Software is furnished to do so.
+#
+#   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+#   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+#   PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+#   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#   OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+#   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#
 # colorize_regex.pl — colorize highlight regex matches in chat messages
 #
 # Description:
@@ -22,24 +44,6 @@
 # History:
 #   2025-03-26, ryoskzypu <ryoskzypu@proton.me>:
 #     version 1.0: initial release
-#
-# License:
-#   MIT No Attribution
-#
-#   Copyright (c) 2025 ryoskzypu <ryoskzypu@proton.me>
-#
-#   Permission is hereby granted, free of charge, to any person obtaining a copy of this
-#   software and associated documentation files (the "Software"), to deal in the Software
-#   without restriction, including without limitation the rights to use, copy, modify,
-#   merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
-#   permit persons to whom the Software is furnished to do so.
-#
-#   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-#   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-#   PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-#   HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-#   OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-#   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use strict;
 use warnings;
@@ -104,17 +108,17 @@ my $attr_rgx   = qr/
                      (?> \o{032} | \o{033})
                      [\o{001}-\o{006}]
                      |
-                     \o{031}\o{034}             # Reset color and keep attributes
+                     \o{031}\o{034}                 # Reset color and keep attributes
                  /x;
 my $reset_rgx  = qr/\o{034}/;
 my $split_rgx  = qr/
-                     ($colors_rgx)              # Colors
+                     ($colors_rgx)                  # Colors
                      |
-                     ($attr_rgx)                # Attributes
+                     ($attr_rgx)                    # Attributes
                      |
-                     ($reset_rgx)               # Reset all
+                     ($reset_rgx)                   # Reset all
                      |
-                                                # Bytes
+                                                    # Bytes
                  /x;
 
 # Space hex code.
