@@ -24,8 +24,12 @@
 #   https://github.com/ryoskzypu/weechat_scripts
 #
 # History:
+#   2025-05-07, ryoskzypu <ryoskzypu@proton.me>:
+#     version 1.0.1: add perl v5.26.0 requirement, because of '<<~'
 #   2025-03-26, ryoskzypu <ryoskzypu@proton.me>:
 #     version 1.0: initial release
+
+use v5.26.0;
 
 use strict;
 use warnings;
@@ -39,7 +43,7 @@ use warnings;
 
 my %script = (
     prog    => 'colorize_regex',
-    version => '1.0',
+    version => '1.0.1',
     author  => 'ryoskzypu <ryoskzypu@proton.me>',
     licence => 'MIT-0',
     desc    => 'Colorize highlight regex matches in chat messages',
