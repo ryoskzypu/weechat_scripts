@@ -27,9 +27,8 @@
 # History:
 # 2025-05-08: ryoskzypu <ryoskzypu@proton.me>
 #   version 33.1.0: add atomic and possessive regex constructs of re module
-# 2025-05-07: ryoskzypu <ryoskzypu@proton.me>
-#   version 33: add many improvements, features, and fixes (see Changes in the
-#               PR #574 for details)
+# 2025-05-08: ryoskzypu <ryoskzypu@proton.me>
+#   version 33: add many improvements, features, and fixes
 # 2023-10-30: Sébastien Helleu <flashcode@flashtux.org>
 #   version 32: revert to info "nick_color" with WeeChat >= 4.1.1
 # 2023-10-16: Sébastien Helleu <flashcode@flashtux.org>
