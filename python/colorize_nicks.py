@@ -25,6 +25,8 @@
 #   https://github.com/ryoskzypu/weechat_scripts
 #
 # History:
+# 2025-05-08: ryoskzypu <ryoskzypu@proton.me>
+#   version 33.1.0: add atomic and possessive regex constructs of re module
 # 2025-05-07: ryoskzypu <ryoskzypu@proton.me>
 #   version 33: add many improvements, features, and fixes (see Changes in the
 #               PR #574 for details)
@@ -110,9 +112,15 @@ w = weechat
 
 SCRIPT_NAME    = 'colorize_nicks'
 SCRIPT_AUTHOR  = 'xt <xt@bash.no>'
-SCRIPT_VERSION = '33'
+SCRIPT_VERSION = '33.1.0'
 SCRIPT_LICENSE = 'GPL'
 SCRIPT_DESC    = 'Use the weechat nick colors in the chat area'
+
+MIN_PYTHON = (3, 11)
+
+# Assert that user's python version is at least 3.11, because of re's module '(?>...)'
+# atomic groups and '*+, ++, ?+, {m,n}+' possessive quantifiers.
+assert sys.version_info >= MIN_PYTHON, w.prnt('', f'{SCRIPT_NAME}\tpython {".".join([str(n) for n in MIN_PYTHON])} or later is required')
 
 # Config file/options
 config_file     = ''  # Pointer
@@ -127,42 +135,42 @@ colored_nicks = {}
 
 colors_rgx = r'''
                  \031
-                 (?:
-                     \d{2}                      # Fixed 'weechat.color.chat.*' codes
+                 (?>
+                     \d{2}+                      # Fixed 'weechat.color.chat.*' codes
                      |
-                     (?:                        # Foreground
+                     (?>                         # Foreground
                          [F*]
-                         [*!\/_%.|]?            # IRC colors (00–15)
-                         \d{2}
+                         [*!\/_%.|]?+            # IRC colors (00–15)
+                         \d{2}+
                          |
-                         (?: F@ | \*@)          # IRC colors (16–99) and WeeChat colors (16–255)
-                         [*!\/_%.|]?
-                         \d{5}
+                         (?> F@ | \*@)           # IRC colors (16–99) and WeeChat colors (16–255)
+                         [*!\/_%.|]?+
+                         \d{5}+
                      )
-                     (?:                        # Background
+                     (?>                         # Background
                          ~
-                         (?: \d{2} | @\d{5})
-                     )?
+                         (?> \d{2}+ | @\d{5}+)
+                     )?+
                  )
              '''
 attr_rgx   = r'''
-                 (?: \032 | \033)
+                 (?> \032 | \033)
                  [\001-\006]
                  |
-                 \031\034                       # Reset color and keep attributes
+                 \031\034                        # Reset color and keep attributes
              '''
 reset_rgx  = r'\034'
 split_rgx  = rf'''
-                 ({colors_rgx})                 # Colors
+                 ({colors_rgx})                  # Colors
                  |
-                 ({attr_rgx})                   # Attributes
+                 ({attr_rgx})                    # Attributes
                  |
-                 ({reset_rgx})                  # Reset all
+                 ({reset_rgx})                   # Reset all
                  |
-                                                # Chars
+                                                 # Chars
              '''
 has_colors_rgx  = rf'{colors_rgx} | {attr_rgx}'
-is_color_rgx    = rf'\A(?: {has_colors_rgx})\Z'
+is_color_rgx    = rf'\A(?> {has_colors_rgx})\Z'
 exact_color_rgx = rf'\A{colors_rgx}\Z'
 
 # Dict of regexes to compile.
@@ -433,7 +441,7 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
     # Split words on spaces, since it is the most common word divider and is not
     # valid in 'nicks' on popular protocols like IRC and matrix; thus protocols
     # that allow spaces in 'nicks' are limited here.
-    for word in re.split(f'{space}+', line.strip(f'{space}')):
+    for word in re.split(f'{space}++', line.strip(f'{space}')):
         nick_prefix = ''  # Reset nick prefix.
 
         if word == '':
@@ -441,8 +449,8 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
 
         # Get possible nick from word.
         nicks_rgx = rf'''
-                        [{prefixes}]?     # Optional prefix char
-                        (?P<nick> [^ ]+)
+                        [{prefixes}]?      # Optional prefix char
+                        (?P<nick> [^ ]++)
                      '''
         if (nick := re.search(nicks_rgx, word, flags=re.VERBOSE)) is not None:
             nick = re.escape(nick.group('nick'))
