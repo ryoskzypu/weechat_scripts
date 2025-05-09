@@ -25,6 +25,8 @@
 #   https://github.com/ryoskzypu/weechat_scripts
 #
 # History:
+# 2025-05-09: ryoskzypu <ryoskzypu@proton.me>
+#   version 33.2.0: fix split words on horizontal whitespace
 # 2025-05-08: ryoskzypu <ryoskzypu@proton.me>
 #   version 33.1.0: add atomic and possessive regex constructs of re module
 # 2025-05-08: ryoskzypu <ryoskzypu@proton.me>
@@ -124,8 +126,8 @@ assert sys.version_info >= MIN_PYTHON, w.prnt('', f'{SCRIPT_NAME}\tpython {".".j
 # Config file/options
 config_file     = ''  # Pointer
 config_option   = {}
-ignore_channels = []  # ignore_channels
-ignore_nicks    = []  # ignore_nicks
+ignore_channels = []
+ignore_nicks    = []
 
 # Dict with every nick on every channel, with its color and prefix as lookup values.
 colored_nicks = {}
@@ -135,18 +137,18 @@ colored_nicks = {}
 colors_rgx = r'''
                  \031
                  (?>
-                     \d{2}+                      # Fixed 'weechat.color.chat.*' codes
+                     \d{2}+                     # Fixed 'weechat.color.chat.*' codes
                      |
-                     (?>                         # Foreground
+                     (?>                        # Foreground
                          [F*]
-                         [*!\/_%.|]?+            # IRC colors (00–15)
+                         [*!\/_%.|]?+           # IRC colors (00–15)
                          \d{2}+
                          |
-                         (?> F@ | \*@)           # IRC colors (16–99) and WeeChat colors (16–255)
+                         (?> F@ | \*@)          # IRC colors (16–99) and WeeChat colors (16–255)
                          [*!\/_%.|]?+
                          \d{5}+
                      )
-                     (?>                         # Background
+                     (?>                        # Background
                          ~
                          (?> \d{2}+ | @\d{5}+)
                      )?+
@@ -156,31 +158,37 @@ attr_rgx   = r'''
                  (?> \032 | \033)
                  [\001-\006]
                  |
-                 \031\034                        # Reset color and keep attributes
+                 \031\034                       # Reset color and keep attributes
              '''
 reset_rgx  = r'\034'
 split_rgx  = rf'''
-                 ({colors_rgx})                  # Colors
+                 ({colors_rgx})                 # Colors
                  |
-                 ({attr_rgx})                    # Attributes
+                 ({attr_rgx})                   # Attributes
                  |
-                 ({reset_rgx})                   # Reset all
+                 ({reset_rgx})                  # Reset all
                  |
-                                                 # Chars
+                                                # Chars
              '''
 has_colors_rgx  = rf'{colors_rgx} | {attr_rgx}'
 is_color_rgx    = rf'\A(?> {has_colors_rgx})\Z'
 exact_color_rgx = rf'\A{colors_rgx}\Z'
 
+# Horizontal whitespace
+# See https://en.wikipedia.org/wiki/Whitespace_character#Unicode.
+horizontal_ws     = r'\N{TAB}\N{SPACE}\N{NO-BREAK SPACE}\N{OGHAM SPACE MARK}\N{MONGOLIAN VOWEL SEPARATOR}\N{EN QUAD}\N{EM QUAD}\N{EN SPACE}\N{EM SPACE}\N{THREE-PER-EM SPACE}\N{FOUR-PER-EM SPACE}\N{SIX-PER-EM SPACE}\N{FIGURE SPACE}\N{PUNCTUATION SPACE}\N{THIN SPACE}\N{HAIR SPACE}\N{NARROW NO-BREAK SPACE}\N{MEDIUM MATHEMATICAL SPACE}\N{IDEOGRAPHIC SPACE}'
+horizontal_ws_rgx = rf'[{horizontal_ws}]++'
+
 # Dict of regexes to compile.
 regex = {
-        'colors':      colors_rgx,
-        'attr':        attr_rgx,
-        'reset':       reset_rgx,
-        'split':       split_rgx,
-        'has_colors':  has_colors_rgx,
-        'is_color':    is_color_rgx,
-        'exact_color': exact_color_rgx,
+        'colors':        colors_rgx,
+        'attr':          attr_rgx,
+        'reset':         reset_rgx,
+        'split':         split_rgx,
+        'has_colors':    has_colors_rgx,
+        'is_color':      is_color_rgx,
+        'exact_color':   exact_color_rgx,
+        'horizontal_ws': horizontal_ws_rgx,
 }
 
 # Reset color code
@@ -437,10 +445,13 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
     if has_colors is not None:
         nick_end = uniq_esc_nick
 
-    # Split words on spaces, since it is the most common word divider and is not
-    # valid in 'nicks' on popular protocols like IRC and matrix; thus protocols
-    # that allow spaces in 'nicks' are limited here.
-    for word in re.split(f'{space}++', line.strip(f'{space}')):
+    # Because whitespace is the most common word divider, split words only on
+    # horizontal whitespace, since vertical whitespace i.e. newline is used as
+    # line terminator.
+    # ASCII space (\x20) is the most common whitespace and is not valid in 'nicks'
+    # on popular protocols like IRC and matrix; thus protocols that allow spaces
+    # in 'nicks' are limited here.
+    for word in regex['horizontal_ws'].split(line.strip(f'{space}')):
         nick_prefix = ''  # Reset nick prefix.
 
         if word == '':
@@ -472,11 +483,11 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
 
             # Find nick in the line.
             line_rgx = rf'''
-                           (?: \A | [ ])             # Boundary
-                           (?P<pref> [{prefixes}])?  # Optional prefix char
+                           (?: \A |  [{horizontal_ws}])  # Boundary
+                           (?P<pref> [{prefixes}])?      # Optional prefix char
                            (?P<nick> {nick})
-                           [{suffixes}]?             # "        suffix char
-                           (?: \Z | [ ])             # Boundary
+                           [{suffixes}]?                 # "        suffix char
+                           (?: \Z |  [{horizontal_ws}])  # Boundary
                        '''
 
             # Nick is found in the line.
