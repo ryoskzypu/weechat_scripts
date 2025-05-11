@@ -25,6 +25,8 @@
 #   https://github.com/ryoskzypu/weechat_scripts
 #
 # History:
+# 2025-05-11: ryoskzypu <ryoskzypu@proton.me>
+#   version 33.2.1: add constant vars name convention
 # 2025-05-09: ryoskzypu <ryoskzypu@proton.me>
 #   version 33.2.0: fix split words on horizontal whitespace
 # 2025-05-08: ryoskzypu <ryoskzypu@proton.me>
@@ -123,6 +125,10 @@ MIN_PYTHON = (3, 11)
 # atomic groups and '*+, ++, ?+, {m,n}+' possessive quantifiers.
 assert sys.version_info >= MIN_PYTHON, w.prnt('', f'{SCRIPT_NAME}\tpython {".".join([str(n) for n in MIN_PYTHON])} or later is required')
 
+# Return codes
+OK  = w.WEECHAT_RC_OK
+ERR = w.WEECHAT_RC_ERROR
+
 # Config file/options
 config_file     = ''  # Pointer
 config_option   = {}
@@ -134,7 +140,7 @@ colored_nicks = {}
 
 # Regexes
 
-colors_rgx = r'''
+COLORS_RGX = r'''
                  \031
                  (?>
                      \d{2}+                     # Fixed 'weechat.color.chat.*' codes
@@ -154,52 +160,53 @@ colors_rgx = r'''
                      )?+
                  )
              '''
-attr_rgx   = r'''
+ATTR_RGX   = r'''
                  (?> \032 | \033)
                  [\001-\006]
                  |
                  \031\034                       # Reset color and keep attributes
              '''
-reset_rgx  = r'\034'
-split_rgx  = rf'''
-                 ({colors_rgx})                 # Colors
+RESET_RGX  = r'\034'
+SPLIT_RGX  = rf'''
+                 ({COLORS_RGX})                 # Colors
                  |
-                 ({attr_rgx})                   # Attributes
+                 ({ATTR_RGX})                   # Attributes
                  |
-                 ({reset_rgx})                  # Reset all
+                 ({RESET_RGX})                  # Reset all
                  |
                                                 # Chars
              '''
-has_colors_rgx  = rf'{colors_rgx} | {attr_rgx}'
-is_color_rgx    = rf'\A(?> {has_colors_rgx})\Z'
-exact_color_rgx = rf'\A{colors_rgx}\Z'
+
+HAS_COLORS_RGX  = rf'{COLORS_RGX} | {ATTR_RGX}'
+IS_COLOR_RGX    = rf'\A(?> {HAS_COLORS_RGX})\Z'
+EXACT_COLOR_RGX = rf'\A{COLORS_RGX}\Z'
 
 # Horizontal whitespace
 # See https://en.wikipedia.org/wiki/Whitespace_character#Unicode.
-horizontal_ws     = r'\N{TAB}\N{SPACE}\N{NO-BREAK SPACE}\N{OGHAM SPACE MARK}\N{MONGOLIAN VOWEL SEPARATOR}\N{EN QUAD}\N{EM QUAD}\N{EN SPACE}\N{EM SPACE}\N{THREE-PER-EM SPACE}\N{FOUR-PER-EM SPACE}\N{SIX-PER-EM SPACE}\N{FIGURE SPACE}\N{PUNCTUATION SPACE}\N{THIN SPACE}\N{HAIR SPACE}\N{NARROW NO-BREAK SPACE}\N{MEDIUM MATHEMATICAL SPACE}\N{IDEOGRAPHIC SPACE}'
-horizontal_ws_rgx = rf'[{horizontal_ws}]++'
+HORIZONTAL_WS     = r'\N{TAB}\N{SPACE}\N{NO-BREAK SPACE}\N{OGHAM SPACE MARK}\N{MONGOLIAN VOWEL SEPARATOR}\N{EN QUAD}\N{EM QUAD}\N{EN SPACE}\N{EM SPACE}\N{THREE-PER-EM SPACE}\N{FOUR-PER-EM SPACE}\N{SIX-PER-EM SPACE}\N{FIGURE SPACE}\N{PUNCTUATION SPACE}\N{THIN SPACE}\N{HAIR SPACE}\N{NARROW NO-BREAK SPACE}\N{MEDIUM MATHEMATICAL SPACE}\N{IDEOGRAPHIC SPACE}'
+HORIZONTAL_WS_RGX = rf'[{HORIZONTAL_WS}]++'
 
 # Dict of regexes to compile.
 regex = {
-        'colors':        colors_rgx,
-        'attr':          attr_rgx,
-        'reset':         reset_rgx,
-        'split':         split_rgx,
-        'has_colors':    has_colors_rgx,
-        'is_color':      is_color_rgx,
-        'exact_color':   exact_color_rgx,
-        'horizontal_ws': horizontal_ws_rgx,
+        'colors':        COLORS_RGX,
+        'attr':          ATTR_RGX,
+        'reset':         RESET_RGX,
+        'split':         SPLIT_RGX,
+        'has_colors':    HAS_COLORS_RGX,
+        'is_color':      IS_COLOR_RGX,
+        'exact_color':   EXACT_COLOR_RGX,
+        'horizontal_ws': HORIZONTAL_WS_RGX,
 }
 
 # Reset color code
-reset = w.color('reset')
+COLOR_RESET = w.color('reset')
 
 # Space hex code
-space = '\x20'
+SPACE = '\x20'
 
 # Unique escape codes
-uniq_esc_nick = '\36'  # Nick
-uniq_esc_pref = '\37'  # Prefix
+UNIQ_ESC_NICK = '\36'  # Nick
+UNIQ_ESC_PREF = '\37'  # Prefix
 
 def config_init():
     '''
@@ -221,7 +228,7 @@ def config_init():
 
     # Create 'look' options.
 
-    opts = [
+    OPTS = [
             {
                 'option':       'ignore_channels',
                 'opt_type':     'string',
@@ -333,7 +340,7 @@ def config_init():
             }
     ]
 
-    if (rc := set_options(config_file, section_look, opts)):
+    if (rc := set_options(config_file, section_look, OPTS)):
         return rc
 
 def set_options(config, section, options):
@@ -439,11 +446,11 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
     chop_match_after     = ''
     color_match          = ''
     colorized_nicks_line = ''
-    nick_end             = reset
+    nick_end             = COLOR_RESET
 
     # Mark the nick's end with a unique escape to identify its position on preserve_colors().
     if has_colors is not None:
-        nick_end = uniq_esc_nick
+        nick_end = UNIQ_ESC_NICK
 
     # Because whitespace is the most common word divider, split words only on
     # horizontal whitespace, since vertical whitespace i.e. newline is used as
@@ -451,7 +458,7 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
     # ASCII space (\x20) is the most common whitespace and is not valid in 'nicks'
     # on popular protocols like IRC and matrix; thus protocols that allow spaces
     # in 'nicks' are limited here.
-    for word in regex['horizontal_ws'].split(line.strip(f'{space}')):
+    for word in regex['horizontal_ws'].split(line.strip(f'{SPACE}')):
         nick_prefix = ''  # Reset nick prefix.
 
         if word == '':
@@ -483,11 +490,11 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
 
             # Find nick in the line.
             line_rgx = rf'''
-                           (?: \A |  [{horizontal_ws}])  # Boundary
+                           (?: \A |  [{HORIZONTAL_WS}])  # Boundary
                            (?P<pref> [{prefixes}])?      # Optional prefix char
                            (?P<nick> {nick})
                            [{suffixes}]?                 # "        suffix char
-                           (?: \Z |  [{horizontal_ws}])  # Boundary
+                           (?: \Z |  [{HORIZONTAL_WS}])  # Boundary
                        '''
 
             # Nick is found in the line.
@@ -510,7 +517,7 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
                         # Mark the prefix with a unique escape to idenfity its
                         # position on preserve_colors().
                         if has_colors is not None:
-                            nick_prefix = f'{uniq_esc_pref}{nick_prefix}'
+                            nick_prefix = f'{UNIQ_ESC_PREF}{nick_prefix}'
                     else:
                         nick_prefix = ''
 
@@ -585,7 +592,7 @@ def preserve_colors(line, colorized_nicks_line):
 
             continue
         # Remove saved codes if a reset code is found.
-        elif i == reset:
+        elif i == COLOR_RESET:
             if not match:
                 new_line += i
 
@@ -600,19 +607,19 @@ def preserve_colors(line, colorized_nicks_line):
                 continue
             # If the char is in a nick match and uncolored's is a unique nick
             # escape code, restore the saved codes, then advance the index.
-            elif match and split_line_nc[idx] == uniq_esc_nick:
+            elif match and split_line_nc[idx] == UNIQ_ESC_NICK:
                 #w.prnt('', f"split_line_nc[{idx} + 1]: " + pp.pformat(f'{split_line_nc[idx + 1]}'))
 
                 # If the chars match, advance the index.
                 if split_line_nc[idx + 1] == i:
-                    new_line += f'{reset}{color_codes}{i}'
+                    new_line += f'{COLOR_RESET}{color_codes}{i}'
                     idx      += 2
                     match     = 0
 
                     continue
             # It is a unique prefix escape code, so get its color code and char,
             # then advance uncolored's index to the start of colorized nick match.
-            elif split_line_nc[idx] == uniq_esc_pref:
+            elif split_line_nc[idx] == UNIQ_ESC_PREF:
                 prefix    = f'{split_line_nc[idx + 1]}{i}'
                 new_line += prefix
                 idx      += 3
@@ -625,7 +632,7 @@ def preserve_colors(line, colorized_nicks_line):
 
                 nick_color  = split_match.group(0)
                 idx        += 1
-                new_line   += f'{reset}{nick_color}{split_line_nc[idx]}'
+                new_line   += f'{COLOR_RESET}{nick_color}{split_line_nc[idx]}'
                 match       = 1
 
                 # If the chars match, advance the index.
@@ -801,7 +808,7 @@ def populate_nicks_cb(*args):
     # Get list of buffers.
     if not (buffers := w.infolist_get('buffer', '', bufname)):
         w.prnt('', f'{SCRIPT_NAME}\tfailed to get list of buffers')
-        return w.WEECHAT_RC_ERROR
+        return ERR
 
     while w.infolist_next(buffers):
         buffer_ptr = w.infolist_pointer(buffers, 'pointer')
@@ -828,7 +835,7 @@ def populate_nicks_cb(*args):
 
                 # Get nicks prefixes.
                 prefix = w.infolist_string(nicklist, 'prefix')
-                if prefix != space:
+                if prefix != SPACE:
                     prefix_color = w.color(w.infolist_string(nicklist, 'prefix_color'))
                     nick_prefix  = f'{prefix_color}{prefix}'
 
@@ -845,7 +852,7 @@ def populate_nicks_cb(*args):
 
     #w.prnt('', 'colored_nicks:\n' + pp.pformat(colored_nicks))
 
-    return w.WEECHAT_RC_OK
+    return OK
 
 def add_nick_cb(data, signal, signal_data):
     ''' Callback that adds a nick to the dict of colored nicks, when a nick is
@@ -867,7 +874,7 @@ def add_nick_cb(data, signal, signal_data):
         while w.infolist_next(nicklist):
             prefix = w.infolist_string(nicklist, 'prefix')
 
-            if prefix != space:
+            if prefix != SPACE:
                 prefix_color = w.color(w.infolist_string(nicklist, 'prefix_color'))
                 nick_prefix  = f'{prefix_color}{prefix}'
 
@@ -882,7 +889,7 @@ def add_nick_cb(data, signal, signal_data):
 
     #w.prnt('', 'colored_nicks:\n' + pp.pformat(colored_nicks))
 
-    return w.WEECHAT_RC_OK
+    return OK
 
 def remove_nick_cb(data, signal, signal_data):
     ''' Callback that removes a nick from the dict of colored nicks, when a nick is
@@ -896,7 +903,7 @@ def remove_nick_cb(data, signal, signal_data):
 
     #w.prnt('', 'colored_nicks:\n' + pp.pformat(colored_nicks))
 
-    return w.WEECHAT_RC_OK
+    return OK
 
 def remove_priv_buffer_cb(data, signal, buffer):
     ''' Callback that removes an IRC private buffer from the dict of colored nicks,
@@ -913,7 +920,7 @@ def remove_priv_buffer_cb(data, signal, buffer):
 
     #w.prnt('', 'colored_nicks:\n' + pp.pformat(colored_nicks))
 
-    return w.WEECHAT_RC_OK
+    return OK
 
 def update_blacklist_cb(*args):
     ''' Callback that sets the blacklist for channels and nicks. '''
@@ -923,7 +930,7 @@ def update_blacklist_cb(*args):
     ignore_channels = w.config_string(config_option['ignore_channels']).split(',')
     ignore_nicks    = w.config_string(config_option['ignore_nicks']).split(',')
 
-    return w.WEECHAT_RC_OK
+    return OK
 
 if __name__ == '__main__':
     if w.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION, SCRIPT_LICENSE, SCRIPT_DESC, '', ''):
