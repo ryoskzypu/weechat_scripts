@@ -24,6 +24,8 @@
 #   https://github.com/ryoskzypu/weechat_scripts
 #
 # History:
+#   2025-05-11, ryoskzypu <ryoskzypu@proton.me>:
+#     version 1.0.2: add constant vars name convention
 #   2025-05-07, ryoskzypu <ryoskzypu@proton.me>:
 #     version 1.0.1: add perl v5.26.0 requirement, because of '<<~'
 #   2025-03-26, ryoskzypu <ryoskzypu@proton.me>:
@@ -41,14 +43,14 @@ use warnings;
 
 # Global variables
 
-my %script = (
+my %SCRIPT = (
     prog    => 'colorize_regex',
     version => '1.0.1',
     author  => 'ryoskzypu <ryoskzypu@proton.me>',
     licence => 'MIT-0',
     desc    => 'Colorize highlight regex matches in chat messages',
 );
-my $prog = $script{'prog'};
+my $PROG = $SCRIPT{'prog'};
 
 # Config
 my %conf;
@@ -58,19 +60,19 @@ my $conf_file;
 my $prog_buff;
 
 # Return codes
-my $ok  = weechat::WEECHAT_RC_OK;
-my $err = weechat::WEECHAT_RC_ERROR;
+my $OK  = weechat::WEECHAT_RC_OK;
+my $ERR = weechat::WEECHAT_RC_ERROR;
 
 # highlight_regex
-my $regex_opt = 'weechat.look.highlight_regex';  # Option
+my $REGEX_OPT = 'weechat.look.highlight_regex';  # Option
 my $re_opt_pat;                                  # Pattern
 
 # Colors
 my $color_match;
-my $color_reset = wcolor('reset');
+my $COLOR_RESET = wcolor('reset');
 
 # Regexes
-my $colors_rgx = qr/
+my $COLORS_RGX = qr/
                      \o{031}
                      (?>
                          \d{2}+                     # Fixed 'weechat.color.chat.*' codes
@@ -90,25 +92,25 @@ my $colors_rgx = qr/
                          )?+
                      )
                  /x;
-my $attr_rgx   = qr/
+my $ATTR_RGX   = qr/
                      (?> \o{032} | \o{033})
                      [\o{001}-\o{006}]
                      |
                      \o{031}\o{034}                 # Reset color and keep attributes
                  /x;
-my $reset_rgx  = qr/\o{034}/;
-my $split_rgx  = qr/
-                     ($colors_rgx)                  # Colors
+my $RESET_RGX  = qr/\o{034}/;
+my $SPLIT_RGX  = qr/
+                     ($COLORS_RGX)                  # Colors
                      |
-                     ($attr_rgx)                    # Attributes
+                     ($ATTR_RGX)                    # Attributes
                      |
-                     ($reset_rgx)                   # Reset all
+                     ($RESET_RGX)                   # Reset all
                      |
                                                     # Bytes
                  /x;
 
 # Space hex code.
-my $space = "\x{20}";
+my $SPACE = "\x{20}";
 
 # Utils
 
@@ -151,11 +153,11 @@ sub wprint
 sub set_buffer
 {
     my $buff_props = {
-        'title'                   => "${prog}.pl — colorize highlight regex matches in chat messages",
+        'title'                   => "${PROG}.pl — colorize highlight regex matches in chat messages",
         'highlight_disable_regex' => '.+',
     };
-    my $new_buff = weechat::buffer_new_props($prog, $buff_props, '', '', '', '');
-    wprint('', "${prog}\tfailed to create '${prog}' buffer") if $new_buff eq '';
+    my $new_buff = weechat::buffer_new_props($PROG, $buff_props, '', '', '', '');
+    wprint('', "${PROG}\tfailed to create '${PROG}' buffer") if $new_buff eq '';
 
     return $new_buff;
 }
@@ -165,15 +167,15 @@ sub chkbuff
 {
     my $jump = shift;
 
-    if (weechat::buffer_search('perl', $prog) eq '') {
+    if (weechat::buffer_search('perl', $PROG) eq '') {
         $prog_buff = set_buffer();
         return if $prog_buff eq '';
     }
 
     if (defined $jump && $jump == 1) {
-        if (weechat::command('', "/buffer perl.$prog") == $err) {
+        if (weechat::command('', "/buffer perl.$PROG") == $ERR) {
             wprint('', "chkbuff\tfailed to jump in the buffer");
-            return $err;
+            return $ERR;
         }
     }
 }
@@ -222,7 +224,7 @@ sub pdbg
 
     if (wstr($conf{'debug_mode'}) eq 'on' && defined $str) {
         chkbuff();
-        wprint('', "${prefix}${var_msg}:\n '${str}${color_reset}'\n");
+        wprint('', "${prefix}${var_msg}:\n '${str}${COLOR_RESET}'\n");
 
         # Convert message to hex. Useful to decode the string and copy it to some tool.
         if ($hex == 1) {
@@ -279,7 +281,7 @@ sub xxd_conv_bytes
         $dot  = $byte_orig;        # Do not convert the hexes to a dot.
     }
 
-    my %colors = (
+    my %COLORS = (
         'red'    => wcolor('*red'),
         'green'  => wcolor('*green'),
         'yellow' => wcolor('*yellow'),
@@ -289,23 +291,23 @@ sub xxd_conv_bytes
 
     # ASCII printable (7-bit)
     if ($byte =~ /\A[\x{20}-\x{7e}]\z/) {
-        return "$colors{'green'}${byte_orig}$color_reset";
+        return "$COLORS{'green'}${byte_orig}$COLOR_RESET";
     }
     # '\t' (tab), '\n' (newline), '\r' (carriage return)
     elsif ($byte =~ /\A[\x{0a}\x{10}\x{0d}]\z/) {
-        return "$colors{'yellow'}${dot}$color_reset";
+        return "$COLORS{'yellow'}${dot}$COLOR_RESET";
     }
     # '\0' (null)
     elsif ($byte =~/\A\x{00}\z/) {
-        return "$colors{'white'}${dot}$color_reset";
+        return "$COLORS{'white'}${dot}$COLOR_RESET";
     }
     # 255 (decimal)
     elsif ($byte =~/\A\x{ff}\z/) {
-        return "$colors{'blue'}${dot}$color_reset";
+        return "$COLORS{'blue'}${dot}$COLOR_RESET";
     }
     # non-printable ASCII and non-ASCII
     else {
-        return "$colors{'red'}${dot}$color_reset";
+        return "$COLORS{'red'}${dot}$COLOR_RESET";
     }
 }
 
@@ -314,7 +316,7 @@ sub xxd_get_rows
 {
     my ($len_pad, $arr) = @_;
     my $len_arr = scalar $arr->@* - 1;
-    my $pad     = $space;
+    my $pad     = $SPACE;
     my @rows;
     my $row;
 
@@ -352,14 +354,14 @@ sub xxd_print
 {
     my ($buff, $hex_rows, $byte_rows) = @_;
     my $rows_len = scalar $hex_rows->@* - 1;
-    my $prefix   = "xxd\t";
+    my $PREFIX   = "xxd\t";
     my $out;
 
     for (my $i = 0; $i <= $rows_len; $i++) {
         $out .= "$hex_rows->[$i]$byte_rows->[$i]";
     }
 
-    wprint($buff, "${prefix}$out");
+    wprint($buff, "${PREFIX}$out");
 }
 
 # Simulate 'xxd -g1 -R always' output.
@@ -387,7 +389,7 @@ sub od_conv_chars
     my $char = shift;
 
     # Decimal to escaped chars table
-    my %esc_chars = (
+    my %ESC_CHARS = (
         '0'  => '\0',
         '7'  => '\a',
         '8'  => '\b',
@@ -400,7 +402,7 @@ sub od_conv_chars
 
     # Escaped
     if ($char =~ /\A[\x{00}\x{07}-\x{0d}]\z/) {
-        return sprintf '%s', $esc_chars{ord $char};
+        return sprintf '%s', $ESC_CHARS{ord $char};
     }
     # Non-printable ASCII and non-ASCII
     elsif ($char =~  /\A[^\x{20}-\x{7e}]\z/) {
@@ -439,18 +441,18 @@ sub od_print
 {
     my ($buff, $hex_rows, $byte_rows) = @_;
     my $rows_len = scalar $hex_rows->@* - 1;
-    my $prefix   = "od\t";
-    my $color    = wcolor('darkgray');
+    my $PREFIX   = "od\t";
+    my $COLOR    = wcolor('darkgray');
     my $out;
 
     for (my $i = 0; $i <= $rows_len; $i++) {
         $out .= $hex_rows->[$i];
 
         # Colorize escapes.
-        $out .= $byte_rows->[$i] =~ s/(?> |^)\K03[1-5](?= |$)/${color}${&}$color_reset/gr;
+        $out .= $byte_rows->[$i] =~ s/(?> |^)\K03[1-5](?= |$)/${COLOR}${&}$COLOR_RESET/gr;
     }
 
-    wprint($buff, "${prefix}$out");
+    wprint($buff, "${PREFIX}$out");
 }
 
 # Simulate 'od -An -tx1c' output.
@@ -498,11 +500,11 @@ sub set_input
     }
 
     # Insert
-    if (weechat::command('', $command) == $err) {
+    if (weechat::command('', $command) == $ERR) {
         chkbuff(1);
         wprint('', "set_input\tfailed to insert command in weechat's input");
 
-        return $err;
+        return $ERR;
     }
 }
 
@@ -511,14 +513,14 @@ sub fmt_desc
 {
     # dbgcolor
 
-    my $pad = $space x 34;
+    my $pad = $SPACE x 34;
 
     my $dbg_fmt = <<~"END";
         [-buffer <name>] od [-eval|-no] <string>
         ${pad}[-buffer <name>] xxd [-eval|-no] <string>
         END
 
-    my $dbg_arg = <<~'END';
+    my $DBG_ARG = <<~'END';
         -buffer: show hex dump on this buffer
              od: hex dump string in 'od -An -tx1c' format
             xxd: "                  'xxd -g1 -R always' format
@@ -542,25 +544,25 @@ sub fmt_desc
 
     # rset
     my $hl_arg = <<~"END";
-           fmt: ${prog}.debug.fmt
+           fmt: ${PROG}.debug.fmt
          debug: "             .debug.mode
             fg: "             .color.match_fg
             bg: "             .color.match_bg
         filter: "             .look.colorize_filter
-         regex: $regex_opt
+         regex: $REGEX_OPT
           prop: weechat.buffer.plugin.server.#channel.highlight_regex
 
          Without argument, all options and regexes are shown.
 
          Examples:
-           insert '/set $regex_opt "regex"' on weechat's input:
+           insert '/set $REGEX_OPT "regex"' on weechat's input:
              /rset regex
 
             insert '/buffer setauto highlight_regex "regex"':
               /rset prop
         END
 
-    return $dbg_fmt, $dbg_arg, $hl_arg;
+    return $dbg_fmt, $DBG_ARG, $hl_arg;
 }
 
 # Callbacks
@@ -573,15 +575,15 @@ sub fmt_desc
 sub regex_set_cb
 {
     my ($data, $buff, $args) = @_;
-    my $prefix = "rset\t";
+    my $PREFIX = "rset\t";
     my $is_opt = 1;
 
     # Options
-    my $fmt_opt     = "${prog}.debug.fmt";
-    my $dbg_opt     = "${prog}.debug.mode";
-    my $fg_opt      = "${prog}.color.match_fg";
-    my $bg_opt      = "${prog}.color.match_bg";
-    my $filter_opt  = "${prog}.look.colorize_filter";
+    my $fmt_opt     = "${PROG}.debug.fmt";
+    my $dbg_opt     = "${PROG}.debug.mode";
+    my $fg_opt      = "${PROG}.color.match_fg";
+    my $bg_opt      = "${PROG}.color.match_bg";
+    my $filter_opt  = "${PROG}.look.colorize_filter";
 
     # Values
     my $fmt         = wstr($conf{'debug_fmt'});
@@ -626,24 +628,24 @@ sub regex_set_cb
               $filter_opt "${filter}"
 
             regex
-              $regex_opt "${re_opt_pat}"
+              $REGEX_OPT "${re_opt_pat}"
 
             prop
               $buf_prop
             END
 
         chkbuff(1);
-        wprint('', "${prefix}$opts");
+        wprint('', "${PREFIX}$opts");
 
-        return $ok;
+        return $OK;
     }
 
     # Check if 'fset' plugin is loaded.
     if (weechat::info_get('plugin_loaded', 'fset') eq '') {
         chkbuff(1);
-        wprint('', "${prefix}fset plugin is not loaded");
+        wprint('', "${PREFIX}fset plugin is not loaded");
 
-        return $ok;
+        return $OK;
     }
 
     # Set options
@@ -663,7 +665,7 @@ sub regex_set_cb
         set_input(1, $filter_opt);
     }
     elsif ($args eq 'regex') {
-        set_input(1, $regex_opt);
+        set_input(1, $REGEX_OPT);
     }
     # Set regex buffer property.
     elsif ($args eq 'prop') {
@@ -671,12 +673,12 @@ sub regex_set_cb
     }
     else {
         chkbuff(1);
-        wprint('', "${prefix}wrong '${args}' argument");
+        wprint('', "${PREFIX}wrong '${args}' argument");
 
-        return $err;
+        return $ERR;
     }
 
-    return $ok;
+    return $OK;
 }
 
 # Debug color callback
@@ -750,13 +752,13 @@ sub regex_set_cb
 sub debug_color_cb
 {
     my ($data, $buffer, $args) = @_;
-    my $prefix = "dbgcolor\t";
+    my $PREFIX = "dbgcolor\t";
 
     if ($args eq '') {
         chkbuff(1);
-        wprint('', "${prefix}missing argument");
+        wprint('', "${PREFIX}missing argument");
 
-        return $err;
+        return $ERR;
     }
 
     # Parse /dbgcolor arguments by first occurrence.
@@ -776,25 +778,25 @@ sub debug_color_cb
 
                 if ($buff eq '') {
                     chkbuff(1);
-                    wprint($buff, "${prefix}failed to get '${args[$i]}' buffer name");
+                    wprint($buff, "${PREFIX}failed to get '${args[$i]}' buffer name");
 
-                    return $err;
+                    return $ERR;
                 }
                 # od/xxd
                 if (! defined $args[$i + 1]) {
                     chkbuff(1) if $buff eq '';
-                    wprint($buff, "${prefix}missing format argument");
+                    wprint($buff, "${PREFIX}missing format argument");
 
-                    return $err;
+                    return $ERR;
                 }
 
                 next;
             }
             else {
                 chkbuff(1);
-                wprint($buff, "${prefix}missing buffer argument");
+                wprint($buff, "${PREFIX}missing buffer argument");
 
-                return $err;
+                return $ERR;
             }
         }
         # od/xxd
@@ -820,9 +822,9 @@ sub debug_color_cb
                     }
                     else {
                         chkbuff(1) if $buff eq '';
-                        wprint($buff, "${prefix}missing string argument");
+                        wprint($buff, "${PREFIX}missing string argument");
 
-                        return $err;
+                        return $ERR;
                     }
                 }
                 # Decode IRC colors.
@@ -832,14 +834,14 @@ sub debug_color_cb
 
                 # Run command.
                 chkbuff(1) if $buff eq '';
-                wprint($buff, "${prefix}'${args_action}${color_reset}'");
+                wprint($buff, "${PREFIX}'${args_action}${COLOR_RESET}'");
                 chkdump($buff, $fmt, $args_action);
             }
             else {
                 chkbuff(1) if $buff eq '';
-                wprint($buff, "${prefix}missing string argument");
+                wprint($buff, "${PREFIX}missing string argument");
 
-                return $err;
+                return $ERR;
             }
 
             last;
@@ -847,22 +849,22 @@ sub debug_color_cb
         # Config format (od/xxd)
         else {
             if ($buff ne '') {
-                wprint($buff, "${prefix}wrong format argument");
-                return $err;
+                wprint($buff, "${PREFIX}wrong format argument");
+                return $ERR;
             }
 
             my $args_decode = decode_arg("@args[$i .. $len_args]");
 
             # Run command.
             chkbuff(1) if $buff eq '';
-            wprint($buff, "${prefix}'${args_decode}${color_reset}'");
+            wprint($buff, "${PREFIX}'${args_decode}${COLOR_RESET}'");
             chkdump($buff, wstr($conf{'debug_fmt'}), $args_decode);
 
             last;
         }
     }
 
-    return $ok;
+    return $OK;
 }
 
 # Completion callbacks
@@ -874,7 +876,7 @@ sub comp_fmt_cb
     weechat::completion_list_add($comp, 'od', 0,  weechat::WEECHAT_LIST_POS_SORT);
     weechat::completion_list_add($comp, 'xxd', 0, weechat::WEECHAT_LIST_POS_SORT);
 
-    return $ok
+    return $OK
 }
 
 sub comp_action_cb
@@ -884,7 +886,7 @@ sub comp_action_cb
     weechat::completion_list_add($comp, '-eval', 0, weechat::WEECHAT_LIST_POS_SORT);
     weechat::completion_list_add($comp, '-no', 0,   weechat::WEECHAT_LIST_POS_SORT);
 
-    return $ok
+    return $OK
 }
 
 # Notify callback
@@ -934,7 +936,7 @@ sub colorize_cb
 {
     my ($data, $hashref) = @_;
 
-    my $prefix    = "colorize_cb\t";
+    my $PREFIX    = "colorize_cb\t";
     my $buffer    = $hashref->{'buffer'};
     my $filtered  = $hashref->{'displayed'};
     my $highlight = $hashref->{'highlight'};
@@ -967,7 +969,7 @@ sub colorize_cb
         my $new_msg;
 
         my $info = <<~_;
-            ${prefix}buffer: $bufname
+            ${PREFIX}buffer: $bufname
             nick:   $nick
             _
 
@@ -978,8 +980,8 @@ sub colorize_cb
         }
 
         # Debug the pre-colorized messages.
-        pdbg($prefix, '$message',     1, $message);
-        pdbg($prefix, '$msg_nocolor', 1, $msg_nocolor);
+        pdbg($PREFIX, '$message',     1, $message);
+        pdbg($PREFIX, '$msg_nocolor', 1, $msg_nocolor);
 
         # Preserve colors
         #
@@ -988,41 +990,41 @@ sub colorize_cb
         # colors after the match are reset.
 
         # Check if message has any color codes.
-        if ($message =~ /$colors_rgx | $attr_rgx/x) {
+        if ($message =~ /$COLORS_RGX | $ATTR_RGX/x) {
             my $color_codes = '';
             my $idx         = 0;
             my $match       = 0;
-            my $uniq_esc    = "\o{035}";
+            my $UNIC_ESC    = "\o{035}";
 
             # Mark the uncolored message with unique escapes to idenfity the matches
             # positions.
-            $msg_nocolor =~ s/$re_opt_pat/${uniq_esc}${&}$uniq_esc/gi  if ! $hl_prop && $hl_opt;
-            $msg_nocolor =~ s/$re_prop_pat/${uniq_esc}${&}$uniq_esc/gi if $hl_prop;
+            $msg_nocolor =~ s/$re_opt_pat/${UNIC_ESC}${&}$UNIC_ESC/gi  if ! $hl_prop && $hl_opt;
+            $msg_nocolor =~ s/$re_prop_pat/${UNIC_ESC}${&}$UNIC_ESC/gi if $hl_prop;
 
             # Remove double sequence of unique escapes from sequential matches.
-            $msg_nocolor =~ s/${uniq_esc}{2}+//g;
-            pdbg($prefix, '$msg_nocolor', 1, $msg_nocolor);
+            $msg_nocolor =~ s/${UNIC_ESC}{2}+//g;
+            pdbg($PREFIX, '$msg_nocolor', 1, $msg_nocolor);
 
             # Split all color codes and bytes from the messages.
-            my @split_msg    = grep { defined $_ && $_ ne '' } split /$split_rgx/, $message;
-            my @split_msg_nc = grep { defined $_ && $_ ne '' } split /$split_rgx/, $msg_nocolor;
+            my @split_msg    = grep { defined $_ && $_ ne '' } split /$SPLIT_RGX/, $message;
+            my @split_msg_nc = grep { defined $_ && $_ ne '' } split /$SPLIT_RGX/, $msg_nocolor;
 
             # Debug the split arrays.
-            #sdbg($prefix, 'split_msg',    \@split_msg);
-            #sdbg($prefix, 'split_msg_nc', \@split_msg_nc);
+            #sdbg($PREFIX, 'split_msg',    \@split_msg);
+            #sdbg($PREFIX, 'split_msg_nc', \@split_msg_nc);
 
             # Iterate through the original split array, comparing every byte against
             # the uncolored array; while reconstructing the new message with saved
             # color codes.
             foreach my $i (@split_msg) {
-                #pdbg($prefix, '$i', 0, $i);
-                #pdbg($prefix, "\$split_msg_nc[$idx]", 0, $split_msg_nc[$idx]);
+                #pdbg($PREFIX, '$i', 0, $i);
+                #pdbg($PREFIX, "\$split_msg_nc[$idx]", 0, $split_msg_nc[$idx]);
                 #wprint('', '');
 
                 # It is a color code, so append its codes to be restored.
-                if ($i =~ /\A(?> $colors_rgx | $attr_rgx)\z/x) {
+                if ($i =~ /\A(?> $COLORS_RGX | $ATTR_RGX)\z/x) {
                     $color_codes .= $i;
-                    #pdbg($prefix, '$color_codes', 0, $color_codes);
+                    #pdbg($PREFIX, '$color_codes', 0, $color_codes);
 
                     # Append the codes if not inside a regex match.
                     $new_msg .= $i unless $match;
@@ -1030,7 +1032,7 @@ sub colorize_cb
                     next;
                 }
                 # Remove saved codes if a reset code is found.
-                elsif ($i eq $color_reset) {
+                elsif ($i eq $COLOR_RESET) {
                     $new_msg     .= $i unless $match;
                     $color_codes  = '';
 
@@ -1046,12 +1048,12 @@ sub colorize_cb
                     }
                     # If the char is in a regex match and uncolored's is a unique
                     # escape, restore the saved codes, then advance the index.
-                    elsif ($match && $split_msg_nc[$idx] eq $uniq_esc) {
-                        #pdbg($prefix, "\$split_msg_nc[$idx + 1]", 0, $split_msg_nc[$idx + 1]);
+                    elsif ($match && $split_msg_nc[$idx] eq $UNIC_ESC) {
+                        #pdbg($PREFIX, "\$split_msg_nc[$idx + 1]", 0, $split_msg_nc[$idx + 1]);
 
                         # If the chars match, advance the index.
                         if ($split_msg_nc[$idx + 1] eq $i) {
-                            $new_msg .= "${color_reset}${color_codes}${i}";
+                            $new_msg .= "${COLOR_RESET}${color_codes}${i}";
                             $idx     += 2;
                             $match    = 0;
 
@@ -1060,11 +1062,11 @@ sub colorize_cb
                     }
                     # It is the start of a colorized regex match (\035), so colorize
                     # the new msg, then advance uncolored's index to the current char.
-                    elsif ($split_msg_nc[$idx] eq $uniq_esc) {
-                        #pdbg($prefix, "\$split_msg_nc[$idx + 1]", 0, $split_msg_nc[$idx + 1]);
+                    elsif ($split_msg_nc[$idx] eq $UNIC_ESC) {
+                        #pdbg($PREFIX, "\$split_msg_nc[$idx + 1]", 0, $split_msg_nc[$idx + 1]);
 
                         ++$idx;
-                        $new_msg .= "${color_reset}$color_match" . $split_msg_nc[$idx];
+                        $new_msg .= "${COLOR_RESET}$color_match" . $split_msg_nc[$idx];
                         $match    = 1;
 
                         # If the chars match, advance the index.
@@ -1078,21 +1080,21 @@ sub colorize_cb
         }
         # Uncolored message, so colorize it normally.
         else {
-            $msg_nocolor =~ s/$re_opt_pat/${color_match}${&}$color_reset/gi  if ! $hl_prop && $hl_opt;
-            $msg_nocolor =~ s/$re_prop_pat/${color_match}${&}$color_reset/gi if $hl_prop;
+            $msg_nocolor =~ s/$re_opt_pat/${color_match}${&}$COLOR_RESET/gi  if ! $hl_prop && $hl_opt;
+            $msg_nocolor =~ s/$re_prop_pat/${color_match}${&}$COLOR_RESET/gi if $hl_prop;
 
             $new_msg = $msg_nocolor;
         }
 
         # Debug the colorized message.
-        pdbg($prefix, '$new_msg', 1, $new_msg);
+        pdbg($PREFIX, '$new_msg', 1, $new_msg);
 
         # Update the hashtable.
         $hashref->{'message'} = $new_msg;
     }
 
     # Debug the hashtable.
-    #wprint('', "${prefix}\$hashref = " . Dumper $hashref);
+    #wprint('', "${PREFIX}\$hashref = " . Dumper $hashref);
 
     return $hashref;
 }
@@ -1103,24 +1105,24 @@ sub upd_colors_cb
     my ($data, $option, $value) = @_;
 
     # Get the option name and update its new value.
-    my ($prog, $section, $opt) = split /\./, $option;
+    my ($PROG, $section, $opt) = split /\./, $option;
     set_colors() if $opt =~ /\Amatch_[bf]g\z/;
 
-    return $ok;
+    return $OK;
 }
 
 # Get 'highlight_regex' callback
 sub get_regex_cb
 {
-    $re_opt_pat = wstr(weechat::config_get($regex_opt));
+    $re_opt_pat = wstr(weechat::config_get($REGEX_OPT));
 
     if ($re_opt_pat eq '') {
         chkbuff();
-        wprint('', "get_regex_cb\tfailed to get or empty '${regex_opt}' option");
-        return $err;
+        wprint('', "get_regex_cb\tfailed to get or empty '${REGEX_OPT}' option");
+        return $ERR;
     }
 
-    return $ok;
+    return $OK;
 }
 
 # Init and configuration
@@ -1145,10 +1147,10 @@ sub config_read
 
     if ($rc != 0) {
         if ($rc == weechat::WEECHAT_CONFIG_READ_MEMORY_ERROR) {
-            wprint('', "${prog}\tnot enough memory to read config file");
+            wprint('', "${PROG}\tnot enough memory to read config file");
         }
         elsif ($rc == weechat::WEECHAT_CONFIG_READ_FILE_NOT_FOUND) {
-            wprint('', "${prog}\tconfig file was not found");
+            wprint('', "${PROG}\tconfig file was not found");
         }
     }
 
@@ -1161,7 +1163,7 @@ sub chkconf
     my ($conf_ptr, $ptr, $type) = @_;
 
     if ($ptr eq '') {
-        wprint('', "${prog}\tfailed to create config $type");
+        wprint('', "${PROG}\tfailed to create config $type");
 
         weechat::config_free($conf_ptr) if $conf_ptr ne '';
         return 1;
@@ -1198,17 +1200,17 @@ sub set_opts
 
 sub config_init
 {
-    $conf_file = weechat::config_new($prog, '', '');
+    $conf_file = weechat::config_new($PROG, '', '');
     return 1 if chkconf('', $conf_file, 'file');
 
     # Color section
     {
-        my $sect       = 'color';
-        my $sect_color = weechat::config_new_section($conf_file, $sect, 0, 0, '', '', '', '', '', '', '', '', '', '');
-        return 1 if chkconf($conf_file, $sect_color, "'${sect}' section");
+        my $SECT       = 'color';
+        my $sect_color = weechat::config_new_section($conf_file, $SECT, 0, 0, '', '', '', '', '', '', '', '', '', '');
+        return 1 if chkconf($conf_file, $sect_color, "'${SECT}' section");
 
         # Options
-        my @opt = (
+        my @OPT = (
             {
                 'option'   => 'color_match_fg',
                 'name'     => 'match_fg',
@@ -1234,17 +1236,17 @@ sub config_init
                 'null_val' => 0,
             },
         );
-        return 1 if set_opts($conf_file, $sect_color, \@opt);
+        return 1 if set_opts($conf_file, $sect_color, \@OPT);
     }
 
     # Debug section
     {
-        my $sect     = 'debug';
-        my $sect_dbg = weechat::config_new_section($conf_file, $sect, 0, 0, '', '', '', '', '', '', '', '', '', '');
-        return 1 if chkconf($conf_file, $sect_dbg, "'${sect}' section");
+        my $SECT     = 'debug';
+        my $sect_dbg = weechat::config_new_section($conf_file, $SECT, 0, 0, '', '', '', '', '', '', '', '', '', '');
+        return 1 if chkconf($conf_file, $sect_dbg, "'${SECT}' section");
 
         # Options
-        my @opt = (
+        my @OPT = (
             {
                 'option'   => 'debug_fmt',
                 'name'     => 'fmt',
@@ -1270,17 +1272,17 @@ sub config_init
                 'null_val' => 0,
             }
         );
-        return 1 if set_opts($conf_file, $sect_dbg, \@opt);
+        return 1 if set_opts($conf_file, $sect_dbg, \@OPT);
     }
 
     # Look section
     {
-        my $sect       = 'look';
-        my $sect_color = weechat::config_new_section($conf_file, $sect, 0, 0, '', '', '', '', '', '', '', '', '', '');
-        return 1 if chkconf($conf_file, $sect_color, "'${sect}' section");
+        my $SECT       = 'look';
+        my $sect_color = weechat::config_new_section($conf_file, $SECT, 0, 0, '', '', '', '', '', '', '', '', '', '');
+        return 1 if chkconf($conf_file, $sect_color, "'${SECT}' section");
 
         # Options
-        my @opt = (
+        my @OPT = (
             {
                 'option'   => 'colorize_filter',
                 'name'     => 'colorize_filter',
@@ -1294,7 +1296,7 @@ sub config_init
                 'null_val' => 0,
             },
         );
-        return 1 if set_opts($conf_file, $sect_color, \@opt);
+        return 1 if set_opts($conf_file, $sect_color, \@OPT);
     }
 
     return 0;
@@ -1310,11 +1312,11 @@ sub config_init
 #     Also the priority is lower than the colorize_lines.pl script, but it does
 #     not matter since *_lines.pl only replaces colors after reset codes.
 if (weechat::register(
-        $script{'prog'},
-        $script{'author'},
-        $script{'version'},
-        $script{'licence'},
-        $script{'desc'},
+        $SCRIPT{'prog'},
+        $SCRIPT{'author'},
+        $SCRIPT{'version'},
+        $SCRIPT{'licence'},
+        $SCRIPT{'desc'},
         '',
         ''
     )) {
@@ -1334,11 +1336,11 @@ if (weechat::register(
     # Hooks
     {
         # Update an option when it changes.
-        weechat::hook_config("${prog}.color.*", 'upd_colors_cb', '');  # Regex match color
-        weechat::hook_config($regex_opt, 'get_regex_cb', '');          # highlight_regex
+        weechat::hook_config("${PROG}.color.*", 'upd_colors_cb', '');  # Regex match color
+        weechat::hook_config($REGEX_OPT, 'get_regex_cb', '');          # highlight_regex
 
         weechat::hook_line('400|', '', '', 'colorize_cb', '');         # Colorize
-        weechat::hook_line('', "perl.$prog", '', 'notify_cb', '');     # Notify
+        weechat::hook_line('', "perl.$PROG", '', 'notify_cb', '');     # Notify
 
         # Commands
         {
@@ -1364,7 +1366,7 @@ if (weechat::register(
             # rset
             weechat::hook_command(
                 'rset',
-                "fast set $prog options and regexes",
+                "fast set $PROG options and regexes",
                 '[fmt|debug|fg|bg|filter|regex|prop]',
                 $hl_arg,
                 'fmt %-
