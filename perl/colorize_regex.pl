@@ -25,6 +25,9 @@
 #
 # History:
 #   2025-05-14, ryoskzypu <ryoskzypu@proton.me>:
+#     version 1.0.4: add unicode_strings pragma and restrict $COLORS_RGX to ASCII,
+#                    to prevent '\d' to match Unicode digits
+#   2025-05-14, ryoskzypu <ryoskzypu@proton.me>:
 #     version 1.0.3: fix Unicode strings not matching correctly, because 'use v5.26.0'
 #                    sets '/u' flag in perl regexes (Thanks Grinnz)
 #   2025-05-11, ryoskzypu <ryoskzypu@proton.me>:
@@ -38,8 +41,8 @@ use v5.26.0;
 
 use strict;
 use warnings;
-
-use Encode qw< encode decode >;
+use feature qw< unicode_strings >;
+use Encode  qw< encode decode >;
 
 # Debug data structures.
 #use Data::Dumper qw< Dumper >;
@@ -96,7 +99,7 @@ my $COLORS_RGX = qr/
                              (?> \d{2}+ | @\d{5}+)
                          )?+
                      )
-                 /x;
+                 /xa;
 my $ATTR_RGX   = qr/
                      (?> \o{032} | \o{033})
                      [\o{001}-\o{006}]
