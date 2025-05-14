@@ -24,6 +24,9 @@
 #   https://github.com/ryoskzypu/weechat_scripts
 #
 # History:
+#   2025-05-14, ryoskzypu <ryoskzypu@proton.me>:
+#     version 1.0.3: fix Unicode strings not matching correctly, because 'use v5.26.0'
+#                    sets '/u' flag in perl regexes (Thanks Grinnz)
 #   2025-05-11, ryoskzypu <ryoskzypu@proton.me>:
 #     version 1.0.2: add constant vars name convention
 #   2025-05-07, ryoskzypu <ryoskzypu@proton.me>:
@@ -35,6 +38,8 @@ use v5.26.0;
 
 use strict;
 use warnings;
+
+use Encode qw< encode decode >;
 
 # Debug data structures.
 #use Data::Dumper qw< Dumper >;
@@ -958,6 +963,10 @@ sub colorize_cb
     my $re_prop_pat = weechat::buffer_get_string($buffer, 'highlight_regex');
     my $hl_prop     = weechat::string_has_highlight_regex($msg_nocolor, $re_prop_pat);
 
+    # Decode the pattern byte string to UTF-8, so Unicode strings can be correctly
+    # matched in perl regexes.
+    $re_prop_pat = decode 'UTF-8', $re_prop_pat;
+
     # Start processing if the message has a highlight.
     if ($highlight eq '1') {
         # and has a regex match.
@@ -983,6 +992,10 @@ sub colorize_cb
         pdbg($PREFIX, '$message',     1, $message);
         pdbg($PREFIX, '$msg_nocolor', 1, $msg_nocolor);
 
+        # Decode the $msg_nocolor byte string to UTF-8, so Unicode strings can be
+        # correctly matched in perl regexes.
+        $msg_nocolor = decode 'UTF-8', $msg_nocolor;
+
         # Preserve colors
         #
         # If the line string is already colored, capture every color code before
@@ -1003,6 +1016,10 @@ sub colorize_cb
 
             # Remove double sequence of unique escapes from sequential matches.
             $msg_nocolor =~ s/${UNIC_ESC}{2}+//g;
+
+            # Re-encode the $msg_nocolor string to bytes, so Unicode strings are
+            # split correctly (per byte).
+            $msg_nocolor = encode 'UTF-8', $msg_nocolor;
             pdbg($PREFIX, '$msg_nocolor', 1, $msg_nocolor);
 
             # Split all color codes and bytes from the messages.
@@ -1083,6 +1100,10 @@ sub colorize_cb
             $msg_nocolor =~ s/$re_opt_pat/${color_match}${&}$COLOR_RESET/gi  if ! $hl_prop && $hl_opt;
             $msg_nocolor =~ s/$re_prop_pat/${color_match}${&}$COLOR_RESET/gi if $hl_prop;
 
+            # Re-encode the $msg_nocolor string to bytes, so pdbg() can split and
+            # dump the string correctly (per byte).
+            $msg_nocolor = encode 'UTF-8', $msg_nocolor;
+
             $new_msg = $msg_nocolor;
         }
 
@@ -1115,6 +1136,10 @@ sub upd_colors_cb
 sub get_regex_cb
 {
     $re_opt_pat = wstr(weechat::config_get($REGEX_OPT));
+
+    # Decode the pattern byte string to UTF-8, so Unicode strings can be correctly
+    # matched in perl regexes.
+    $re_opt_pat  = decode 'UTF-8', $re_opt_pat;
 
     if ($re_opt_pat eq '') {
         chkbuff();
