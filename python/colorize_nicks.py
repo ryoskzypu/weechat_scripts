@@ -102,6 +102,18 @@
 #   version 0.2: use ignore_channels when populating to increase performance.
 # 2010-02-03, xt
 #   version 0.1: initial (based on ruby script by dominikh)
+#
+# TODO:
+#   - Because many people could still be using python < 3.11, do not add the atomic
+#     and possessive regex constructs until Debian, Ubuntu and Fedora phase out
+#     their LTS distros that still support python < 3.11.
+#
+#   - Disable the automatic decoding of IRC colors from colorize_input option and
+#     add an option to toggle it. (Thanks aloo_shu)
+#
+#   - Because of the weechat style of one commit per PR, bundle all the changes
+#     in one version (33.1.0) for the next PR and describe the changes in the
+#     body of the commit.
 
 import weechat
 import sys
@@ -269,6 +281,18 @@ def config_init():
                 'option':       'colorize_input',
                 'opt_type':     'boolean',
                 'desc':         'colorize nicks in input',
+                'str_val':      '',
+                'min_val':      0,
+                'max_val':      0,
+                'default':      'off',
+                'value':        'off',
+                'null_val':     0,
+                'check_val_cb': '',
+            },
+            {
+                'option':       'irc_decode_input',
+                'opt_type':     'boolean',
+                'desc':         'colorize IRC colors in input when colorize_input is on',
                 'str_val':      '',
                 'min_val':      0,
                 'max_val':      0,
@@ -567,7 +591,7 @@ def preserve_colors(line, colorized_nicks_line):
     idx           = 0
     match         = 0
 
-    # Split all color codes and bytes from the lines.
+    # Split all color codes and chars from the lines.
     split_line    = [x for x in regex['split'].split(line)                 if x is not None and x]
     split_line_nc = [y for y in regex['split'].split(colorized_nicks_line) if y is not None and y]
 
@@ -767,7 +791,8 @@ def colorize_input_cb(data, modifier, modifier_data, line):
     buftype = w.buffer_get_string(buffer, 'localvar_type')
     channel = w.buffer_get_string(buffer, 'localvar_channel')
 
-    irc_only = w.config_boolean(config_option['irc_only'])
+    irc_only         = w.config_boolean(config_option['irc_only'])
+    irc_decode_input = w.config_boolean(config_option['irc_decode_input'])
 
     # Colorize only IRC user messages.
     if plugin == 'irc' or irc_only and plugin != 'irc':
@@ -783,8 +808,8 @@ def colorize_input_cb(data, modifier, modifier_data, line):
     if channel and channel in ignore_channels:
         return line
 
-    # Decode IRC colors from input.
-    if plugin == 'irc':
+    # Decode IRC colors in input if config asks.
+    if plugin == 'irc' and irc_decode_input:
         line = w.hook_modifier_exec('irc_color_decode', '1', line)
 
     # Init colorizing process.
