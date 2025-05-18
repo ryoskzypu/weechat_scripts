@@ -105,11 +105,8 @@
 #
 # TODO:
 #   - Because many people could still be using python < 3.11, do not add the atomic
-#     and possessive regex constructs until Debian, Ubuntu and Fedora phase out
+#     and possessive regex constructs until Debian, Ubuntu, and Fedora phase out
 #     their LTS distros that still support python < 3.11.
-#
-#   - Disable the automatic decoding of IRC colors from colorize_input option and
-#     add an option to toggle it. (Thanks aloo_shu)
 #
 #   - Because of the weechat style of one commit per PR, bundle all the changes
 #     in one version (33.1.0) for the next PR and describe the changes in the
@@ -419,7 +416,12 @@ def compile_regexes():
     ''' Compiles all script regexes for reuse. '''
 
     for k,v in regex.items():
-        regex[k] = re.compile(v, flags=re.VERBOSE)
+        # Restrict shorthand char classes to match only ASCII, so Unicode numbers
+        # are not matched in '\d'.
+        if k == 'colors':
+            regex[k] = re.compile(v, flags=re.ASCII | re.VERBOSE)
+        else:
+            regex[k] = re.compile(v, flags=re.VERBOSE)
 
 def debug_str(var, string):
     ''' Displays string information for debugging in core.weechat buffer. '''
