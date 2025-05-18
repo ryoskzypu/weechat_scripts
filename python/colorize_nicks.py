@@ -152,21 +152,23 @@ colored_nicks = {}
 COLORS_RGX = r'''
                  \031
                  (?>
-                     \d{2}+                     # Fixed 'weechat.color.chat.*' codes
-                     |
-                     (?>                        # Foreground
-                         [F*]
-                         [*!\/_%.|]?+           # IRC colors (00–15)
-                         \d{2}+
+                     (?a:
+                         \d{2}+                     # Fixed 'weechat.color.chat.*' codes
                          |
-                         (?> F@ | \*@)          # IRC colors (16–99) and WeeChat colors (16–255)
-                         [*!\/_%.|]?+
-                         \d{5}+
+                         (?>                        # Foreground
+                             [F*]
+                             [*!\/_%.|]?+           # IRC colors (00–15)
+                             \d{2}+
+                             |
+                             (?> F@ | \*@)          # IRC colors (16–99) and WeeChat colors (16–255)
+                             [*!\/_%.|]?+
+                             \d{5}+
+                         )
+                         (?>                        # Background
+                             ~
+                             (?> \d{2}+ | @\d{5}+)
+                         )?+
                      )
-                     (?>                        # Background
-                         ~
-                         (?> \d{2}+ | @\d{5}+)
-                     )?+
                  )
              '''
 ATTR_RGX   = r'''
@@ -416,12 +418,7 @@ def compile_regexes():
     ''' Compiles all script regexes for reuse. '''
 
     for k,v in regex.items():
-        # Restrict shorthand char classes to match only ASCII, so Unicode numbers
-        # are not matched in '\d'.
-        if k == 'colors':
-            regex[k] = re.compile(v, flags=re.ASCII | re.VERBOSE)
-        else:
-            regex[k] = re.compile(v, flags=re.VERBOSE)
+        regex[k] = re.compile(v, flags=re.VERBOSE)
 
 def debug_str(var, string):
     ''' Displays string information for debugging in core.weechat buffer. '''
