@@ -912,6 +912,14 @@ sub notify_cb
 # Colorize callback
 #
 # Notes:
+#   - Since WeeChat uses POSIX ERE engine from 'regex.h' header, it always return
+#     the longest match on alternations, e.g. cats in /c|ca|cat|cats/, but perl
+#     returns 'c'.
+#     Thus the colorizing will be technically wrong in alternations. It is not
+#     worth changing perl's behavior to obey POSIX rules, because there is always
+#     a match regardless.
+#     See also https://www.regular-expressions.info/alternation.html for details.
+#
 #   - WeeChat regexes are case insensitive by default, so the script's regexes
 #     must set the /i modifier.
 #     Also they can be set to case sensitive with (?-i) at the start of the pattern
