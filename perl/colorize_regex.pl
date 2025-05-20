@@ -114,7 +114,7 @@ my $SPLIT_RGX  = qr/
                      |
                      ($RESET_RGX)                   # Reset all
                      |
-                                                    # Bytes
+                                                    # Chars
                  /x;
 
 # Space hex code.

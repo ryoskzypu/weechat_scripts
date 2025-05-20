@@ -572,8 +572,8 @@ def preserve_colors(line, colorized_nicks_line):
       1. Create an IRC channel.
            /j ##testing-weechat
 
-      2. Create the nick 'nick111' with perlexec:
-          /perlexec my $buffer = weechat::buffer_search('==', 'irc.libera.##testing-weechat'); my $group = weechat::nicklist_add_group($buffer, '', 'test_group', 'weechat.color.nicklist_group', 1); weechat::nicklist_add_nick($buffer, $group, 'nick111', 'blue', '@', 'lightgreen', 1)
+      2. Create the nick 'nick111':
+          /perl eval my $buffer = weechat::buffer_search('==', 'irc.libera.##testing-weechat'); my $group = weechat::nicklist_add_group($buffer, '', 'test_group', 'weechat.color.nicklist_group', 1); weechat::nicklist_add_nick($buffer, $group, 'nick111', 'blue', '@', 'lightgreen', 1)
 
       3. Send this message in the channel with script unloaded:
           /input insert \x0305<\x03043 \x02\x0307nick111 is awesome\x02 \x0314[0 user] \x0399\x1fhttps://github.com/ \x0305n\x0355i\x0384c\x0302k\x0f\x03921\x03091\x03381 /weechat/ https\x1f\x16:// nick111 .org/
@@ -712,9 +712,8 @@ def colorize_cb(data, hashtable):
       1. Create an IRC channel:
          /j ##testing-weechat
 
-      2. Create the nicks: alice, :alicee, alicee:, :alicee:, and utf8©nick
-         with perlexec:
-           /perlexec my @nicks = qw(alice :alicee alicee: :alicee: utf8©nick); my $buffer = weechat::buffer_search('==', 'irc.libera.##testing-weechat'); my $group = weechat::nicklist_add_group($buffer, '', 'test_group', 'weechat.color.nicklist_group', 1); foreach my $i (@nicks) { weechat::nicklist_add_nick($buffer, $group, $i, 'default', '@', 'lightgreen', 1) }
+      2. Create the nicks: alice, :alicee, alicee:, :alicee:, and utf8©nick:
+           /perl eval my @nicks = qw(alice :alicee alicee: :alicee: utf8©nick); my $buffer = weechat::buffer_search('==', 'irc.libera.##testing-weechat'); my $group = weechat::nicklist_add_group($buffer, '', 'test_group', 'weechat.color.nicklist_group', 1); foreach my $i (@nicks) { weechat::nicklist_add_nick($buffer, $group, $i, 'default', '@', 'lightgreen', 1) }
 
       3. Then paste and send this string:
          hey alicee and utf8©nickz, how are you? sorry, alice and utf8©nick   @alicee: @:alicee @:alicee: aaaliceee @:alicee:: @::alicee:: @alicee:: %alicee:, ~:alicee,  Nice to meet you @:alicee,,  &:alicee:, @:alicee,: :alicee, :alicee alicee: <3 :alicee: :alicee::: +utf8©nick: :-) bye
