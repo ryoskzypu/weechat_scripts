@@ -493,14 +493,14 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
                         (?P<nick> [^ ]++)
                      '''
         if (nick := re.search(nicks_rgx, word, flags=re.VERBOSE)) is not None:
-            nick = re.escape(nick.group('nick'))
+            nick = nick.group('nick')
 
         # If the word is not a known nick and its last character is an option
         # suffix (e.g. colon ':' or comma ','), try to match the word without it.
         # This is necessary as 'foo:' is a valid nick, which could be addressed
         # as 'foo::'.
         if nick not in colored_nicks[buffer]:
-            if (suffix := re.search(rf'[{suffixes}]$', nick)) is not None:
+            if (suffix := re.search(rf'[{suffixes}]$', re.escape(nick))) is not None:
                 nick = nick[:-1]
 
         # Nick exists on buffer.
@@ -510,6 +510,9 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
 
             # Get its color.
             nick_color = colored_nicks[buffer][nick]['color']
+
+            # Escape regex meta-chars if any.
+            nick = re.escape(nick)
 
             # Find nick in the line.
             line_rgx = rf'''
@@ -522,6 +525,8 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
 
             # Nick is found in the line.
             if (line_match := re.search(line_rgx, chop_line, flags=re.VERBOSE)) is not None:
+                nick = line_match.group('nick')
+
                 # In order to prevent the regex engine to needless find the nicks
                 # at previous match positions, preserve the state by chopping the
                 # line at the start and end positions of matches.
