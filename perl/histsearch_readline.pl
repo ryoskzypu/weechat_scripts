@@ -66,6 +66,12 @@ my $search_pos = 0;
 my $bwd_len    = 0;
 my $first      = 0;
 
+# Unique escape char
+my $UNIQ_ESC = "\o{034}";
+
+# Regexes
+my $hs_cmd_rgx = qr{ \A/hist_search_(backward | forward)\z }x;
+
 # Utils
 
 # Print string on the weechat core buffer.
@@ -75,8 +81,6 @@ sub wprint
     weechat::print('', $str);
 }
 
-# Update command history.
-#
 # Update the current global history or local buffer history data.
 sub update_cmdhist
 {
@@ -225,8 +229,8 @@ sub input_content_cb
         $bwd_len  = scalar @bwd_hist;
         #wprint('@bwd_hist = ' . Dumper \@bwd_hist);
 
-        # Delete the unique \034 char from input, so the cursor will stay in position
-        # on subsequent backward searches.
+        # Delete the unique escape char from input, so the cursor will stay in
+        # position on subsequent backward searches.
         weechat::command('', '/input delete_previous_char');
 
         if (@bwd_hist) {
@@ -244,8 +248,8 @@ sub input_content_cb
             return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
         }
 
-        # Remove the unique \034 char from string if command was not found in history.
-        $string =~ s/\x{1c}//;
+        # Remove the unique escape char from string if command was not found in history.
+        $string =~ s/$UNIQ_ESC//;
         return $string;
     }
     # Simulate history-search-forward command.
@@ -263,7 +267,7 @@ sub input_content_cb
             return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
         }
 
-        $string =~ s/\x{1c}//;
+        $string =~ s/$UNIQ_ESC//;
         return $string;
     }
 
@@ -287,7 +291,7 @@ sub hs_backward_cb
     $backward = 1;
     $forward  = 0;
 
-    # Insert a unique \034 char to trigger the input_content_cb().
+    # Insert a unique \034 escape char (\x1c in hex) to trigger the input_content_cb().
     weechat::command('', '/input insert \x1c');
 
     return $OK;
@@ -315,6 +319,7 @@ sub hs_list_cb
     my ($data, $buffer, $args) = @_;
     my $PREFIX   = "hslist\t";
     my $infolist = weechat::infolist_get('key', '', 'default');
+    my $found    = 0;
 
     wprint("${PREFIX}Current keyboard keys bound to /hist_search_* commands:");
 
@@ -322,13 +327,16 @@ sub hs_list_cb
         my $key = weechat::infolist_string($infolist, 'key');
         my $cmd = weechat::infolist_string($infolist, 'command');
 
-        if ($cmd =~ m{\A/hist_search_(backward | forward)\z}x) {
+        if ($cmd =~ $hs_cmd_rgx) {
+            $found = 1;
             wprint("  '${key}' => '${cmd}'");
+
             next;
         }
     }
     weechat::infolist_free($infolist);
 
+    wprint('  none') unless $found;
     return $OK;
 }
 
@@ -339,8 +347,8 @@ sub set_keybinds_cb
 {
     my ($data, $option, $value) = @_;
 
-    my $hs_backward = weechat::config_string($conf{'hist_search_backward'});
-    my $hs_forward  = weechat::config_string($conf{'hist_search_forward'});
+    my $key_bwd = weechat::config_string($conf{'hist_search_backward'});
+    my $key_fwd = weechat::config_string($conf{'hist_search_forward'});
 
     my $info = <<~"END";
         ${PROG}\t
@@ -356,13 +364,13 @@ sub set_keybinds_cb
         ${PROG}\tSee '/fset _readline' and '/help key' for details.
         END
 
-    if ($hs_backward eq '') {
+    if ($key_bwd eq '') {
         wprint("${PROG}\tkeybind for history search backward is not set");
         wprint($info);
 
         return $ERR;
     }
-    if ($hs_forward eq '') {
+    if ($key_fwd eq '') {
         wprint("${PROG}\tkeybind for history search forward is not set");
         wprint($info);
 
@@ -377,9 +385,11 @@ sub set_keybinds_cb
             my $key = weechat::infolist_string($infolist, 'key');
             my $cmd = weechat::infolist_string($infolist, 'command');
 
-            if ($key =~ /\A(\Q$hs_backward\E | \Q$hs_forward\E)\z/xi) {
-                wprint("${PROG}\tkey '${key}' was bound to '${cmd}' command");
-                weechat::key_unbind('default', $key);
+            if ($key =~ /\A(\Q$key_bwd\E | \Q$key_fwd\E)\z/xi) {
+                if ($cmd !~ $hs_cmd_rgx) {
+                    wprint("${PROG}\tkey '${key}' was bound to '${cmd}' command");
+                    weechat::key_unbind('default', $key);
+                }
 
                 next;
             }
@@ -389,8 +399,8 @@ sub set_keybinds_cb
 
     # Set the keybinds.
     {
-        weechat::key_bind('default', { $hs_backward => '/hist_search_backward' });
-        weechat::key_bind('default', { $hs_forward  => '/hist_search_forward' });
+        weechat::key_bind('default', { $key_bwd => '/hist_search_backward' });
+        weechat::key_bind('default', { $key_fwd => '/hist_search_forward' });
     }
 
     return $OK;
