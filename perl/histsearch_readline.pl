@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: MIT-0
 #
-# histsearch_readline.pl — simulate GNU Readline's history search commands
+# histsearch_readline.pl — simulate GNU's Readline history search commands
 #
 # Description:
-#   Simulate GNU Readline's history-search-backward and history-search-forward
+#   Simulate GNU's Readline history-search-backward and history-search-forward
 #   commands.
 #   See:
 #     https://wiki.archlinux.org/title/Readline#History
@@ -27,7 +27,6 @@ use v5.26.0;
 
 use strict;
 use warnings;
-
 use builtin qw< trim >;
 
 # Debug data structures.
@@ -42,7 +41,7 @@ my %SCRIPT = (
     version => '1.0',
     author  => 'ryoskzypu <ryoskzypu@proton.me>',
     licence => 'MIT-0',
-    desc    => "Simulate GNU Readline's history search commands",
+    desc    => "Simulate GNU's Readline history search commands",
 );
 my $PROG = $SCRIPT{'prog'};
 
@@ -70,7 +69,7 @@ my $first      = 0;
 my $UNIQ_ESC = "\o{034}";
 
 # Regexes
-my $hs_cmd_rgx = qr{ \A/hist_search_(backward | forward)\z }x;
+my $HS_CMD_RGX = qr{ \A/hist_search_(backward | forward)\z }x;
 
 # Utils
 
@@ -89,14 +88,14 @@ sub update_cmdhist
 
     # Global
     if ($mode eq 'global') {
-        $buffer = '';
-        $target = $mode;
         $cmd_hist{$mode} = [];
+        $buffer          = '';
+        $target          = $mode;
     }
     # Local
     else {
-        $target = $buffer;
         $cmd_hist{$buffer} = [];
+        $target = $buffer;
     }
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
 
@@ -170,7 +169,7 @@ sub init_cmdhist_cb
 
 # History add callback
 #
-# Update the command history hash when a command is run.
+# Update the command history hash whenever a command is run.
 sub history_add_cb
 {
     my ($data, $modifier, $buffer, $string) = @_;
@@ -327,7 +326,7 @@ sub hs_list_cb
         my $key = weechat::infolist_string($infolist, 'key');
         my $cmd = weechat::infolist_string($infolist, 'command');
 
-        if ($cmd =~ $hs_cmd_rgx) {
+        if ($cmd =~ $HS_CMD_RGX) {
             $found = 1;
             wprint("  '${key}' => '${cmd}'");
 
@@ -342,7 +341,7 @@ sub hs_list_cb
 
 # Set keybinds callback
 #
-# Check and set the keybinds.
+# Check and set the keyboard binds.
 sub set_keybinds_cb
 {
     my ($data, $option, $value) = @_;
@@ -365,19 +364,20 @@ sub set_keybinds_cb
         END
 
     if ($key_bwd eq '') {
-        wprint("${PROG}\tkeybind for history search backward is not set");
+        wprint("${PROG}\tkeybind for history-search-backward is not set");
         wprint($info);
 
         return $ERR;
     }
     if ($key_fwd eq '') {
-        wprint("${PROG}\tkeybind for history search forward is not set");
+        wprint("${PROG}\tkeybind for history-search-forward is not set");
         wprint($info);
 
         return $ERR;
     }
 
-    # Unbind keys that were bound to a command and inform the user.
+    # Unbind keys that were bound to a command other than /hist_search_* and inform
+    # the user.
     {
         my $infolist = weechat::infolist_get('key', '', 'default');
 
@@ -385,11 +385,9 @@ sub set_keybinds_cb
             my $key = weechat::infolist_string($infolist, 'key');
             my $cmd = weechat::infolist_string($infolist, 'command');
 
-            if ($key =~ /\A(\Q$key_bwd\E | \Q$key_fwd\E)\z/xi) {
-                if ($cmd !~ $hs_cmd_rgx) {
-                    wprint("${PROG}\tkey '${key}' was bound to '${cmd}' command");
-                    weechat::key_unbind('default', $key);
-                }
+            if ($key =~ /\A(\Q$key_bwd\E | \Q$key_fwd\E)\z/xi && $cmd !~ $HS_CMD_RGX) {
+                wprint("${PROG}\tkey '${key}' was bound to '${cmd}' command");
+                weechat::key_unbind('default', $key);
 
                 next;
             }
@@ -562,7 +560,7 @@ if (weechat::register(
     {
         # Update an option when it changes.
         weechat::hook_config("${PROG}.key.search_*", 'set_keybinds_cb', '');  # Keybinds
-        weechat::hook_config("${PROG}.search.mode",  'init_cmdhist_cb', '');  # Modes: global/local
+        weechat::hook_config("${PROG}.search.mode",  'init_cmdhist_cb', '');  # Modes: global, local
 
         # Command-line
         weechat::hook_modifier('input_text_display', 'input_display_cb', '');
