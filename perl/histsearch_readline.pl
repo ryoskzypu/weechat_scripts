@@ -13,24 +13,27 @@
 #
 #   Commands:
 #     /hslist
-#       List the keyboard keys that are currently bound to the /hist_search_backward
+#       List keyboard keys that are currently bound to the /hist_search_backward
 #       and /hist_search_forward commands.
 #
 # Bugs:
 #   https://github.com/ryoskzypu/weechat_scripts
+#
+# History:
+#   2025-05-25, ryoskzypu <ryoskzypu@proton.me>:
+#     version 1.0: initial release (Idea by skejg, thanks)
 
 use v5.26.0;
 
 use strict;
 use warnings;
-#use feature qw< unicode_strings >;
-#use Encode  qw< encode decode >;
+
 use builtin qw< trim >;
 
 # Debug data structures.
-use Data::Dumper qw< Dumper >;
-$Data::Dumper::Terse = 1;
-$Data::Dumper::Useqq = 1;
+#use Data::Dumper qw< Dumper >;
+#$Data::Dumper::Terse = 1;
+#$Data::Dumper::Useqq = 1;
 
 # Global variables
 
@@ -52,15 +55,15 @@ my $OK  = weechat::WEECHAT_RC_OK;
 my $ERR = weechat::WEECHAT_RC_ERROR;
 
 # Command history
-my %command_hist;
-my @backward_hist;
+my %cmd_hist;
+my @bwd_hist;
 
 # Callback flags
 my $backward   = 0;
 my $forward    = 0;
 my $input_pos  = 0;
 my $search_pos = 0;
-my $back_len   = 0;
+my $bwd_len    = 0;
 my $first      = 0;
 
 # Utils
@@ -72,7 +75,7 @@ sub wprint
     weechat::print('', $str);
 }
 
-# Update command history
+# Update command history.
 #
 # Update the current global history or local buffer history data.
 sub update_cmdhist
@@ -84,23 +87,23 @@ sub update_cmdhist
     if ($mode eq 'global') {
         $buffer = '';
         $target = $mode;
-        $command_hist{$mode} = [];
+        $cmd_hist{$mode} = [];
     }
     # Local
     else {
         $target = $buffer;
-        $command_hist{$buffer} = [];
+        $cmd_hist{$buffer} = [];
     }
-    wprint('%command_hist = ' . Dumper \%command_hist);
+    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
 
     my $infolist = weechat::infolist_get('history', $buffer, '');
 
     while (weechat::infolist_next($infolist)) {
-        my $command = weechat::infolist_string($infolist, 'text');
-        $command = trim $command;  # Strip leading and trailing whitespace.
-        push @{ $command_hist{$target} }, $command;
-    }
+        # Get command and strip leading and trailing whitespace.
+        my $cmd = trim(weechat::infolist_string($infolist, 'text'));
 
+        push $cmd_hist{$target}->@*, $cmd;
+    }
     weechat::infolist_free($infolist);
 
     return $target;
@@ -115,25 +118,22 @@ sub init_cmdhist_cb
 {
     my ($data, $option, $value) = @_;
 
-    %command_hist = ();
+    %cmd_hist = ();
+    my $mode  = weechat::config_string($conf{'search_mode'});
     my %seen;
-    my $mode = weechat::config_string($conf{'search_mode'});
 
     # Global history
     if ($mode eq 'global') {
         my $infolist = weechat::infolist_get('history', '', '');
 
         while (weechat::infolist_next($infolist)) {
-            #my $fields = weechat::infolist_fields($infolist);
-            my $command = weechat::infolist_string($infolist, 'text');
-            $command = trim $command;
-            push @{ $command_hist{$mode} }, $command;
+            my $cmd = trim(weechat::infolist_string($infolist, 'text'));
+            push $cmd_hist{$mode}->@*, $cmd;
         }
-
-        # Deduplicate the global buffer's command hist array.
-        $command_hist{$mode} = [ grep { ! $seen{$_}++ } $command_hist{$mode}->@* ];
-
         weechat::infolist_free($infolist);
+
+        # Deduplicate the global command hist array.
+        $cmd_hist{$mode} = [ grep { ! $seen{$_}++ } $cmd_hist{$mode}->@* ];
     }
     # Local buffer history
     else {
@@ -145,27 +145,22 @@ sub init_cmdhist_cb
         }
 
         while (weechat::infolist_next($buffers)) {
-            my $buffer_ptr = weechat::infolist_pointer($buffers, 'pointer');
-
-            my $infolist = weechat::infolist_get('history', $buffer_ptr, '');
+            my $buf_ptr  = weechat::infolist_pointer($buffers, 'pointer');
+            my $infolist = weechat::infolist_get('history', $buf_ptr, '');
 
             while (weechat::infolist_next($infolist)) {
-                #my $fields = weechat::infolist_fields($infolist);
-                my $command = weechat::infolist_string($infolist, 'text');
-                $command = trim $command;
-                push @{ $command_hist{$buffer_ptr} }, $command;
+                my $cmd = trim(weechat::infolist_string($infolist, 'text'));
+                push $cmd_hist{$buf_ptr}->@*, $cmd;
             }
-
-            # Deduplicate the buffer's command hist array.
-            $command_hist{$buffer_ptr} = [ grep { ! $seen{$_}++ } $command_hist{$buffer_ptr}->@* ];
-
             weechat::infolist_free($infolist);
-        }
 
+            # Deduplicate the local buffer's command hist array.
+            $cmd_hist{$buf_ptr} = [ grep { ! $seen{$_}++ } $cmd_hist{$buf_ptr}->@* ];
+        }
         weechat::infolist_free($buffers);
     }
 
-    wprint('%command_hist = ' . Dumper \%command_hist);
+    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
     return $OK;
 }
 
@@ -175,26 +170,18 @@ sub init_cmdhist_cb
 sub history_add_cb
 {
     my ($data, $modifier, $buffer, $string) = @_;
-    my $mode = weechat::config_string($conf{'search_mode'});
-    my %seen;
 
-    my $input = <<~_;
-        \$modifier: '${modifier}'
-        \$buffer:   '${buffer}'
-        \$string:   '${string}'
-        _
-
-    wprint($input);
-
+    my $mode   = weechat::config_string($conf{'search_mode'});
     my $target = update_cmdhist($buffer, $string, $mode);
+    my %seen;
 
     # Add the command to history.
     $string = trim $string;
-    unshift @{ $command_hist{$target} }, $string;
+    unshift $cmd_hist{$target}->@*, $string;
 
-    # Deduplicate the command hist array from respective target mode.
-    $command_hist{$target} = [ grep { ! $seen{$_}++ } $command_hist{$target}->@* ];
-    wprint('%command_hist = ' . Dumper \%command_hist);
+    # Deduplicate the command hist array from the respective target mode.
+    $cmd_hist{$target} = [ grep { ! $seen{$_}++ } $cmd_hist{$target}->@* ];
+    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
 
     return $string;
 }
@@ -207,18 +194,6 @@ sub input_display_cb
     my ($data, $modifier, $buffer, $string) = @_;
 
     $input_pos = weechat::buffer_get_integer($buffer, 'input_pos');
-
-    my $input = <<~_;
-        \$modifier: '${modifier}'
-        \$buffer:   '${buffer}'
-        \$string:   '${string}'
-        \$input_pos: $input_pos
-        \$backward:  $backward
-        \$forward:   ${forward}\n
-        _
-
-    wprint($input);
-
     return $string;
 }
 
@@ -229,19 +204,8 @@ sub input_content_cb
 {
     my ($data, $modifier, $buffer, $string) = @_;
 
-    my $input = <<~_;
-        \$modifier:  $modifier
-        \$buffer:    ${buffer}
-        \$string:   '${string}'
-        \$backward:  $backward
-        \$forward:   ${forward}\n
-        _
-
-    #wprint($input);
-
     # Get the command string at the start of input line until the cursor position.
     my $partial = unpack "x0 a$input_pos", $string;
-    wprint("\$partial: '${partial}'");
 
     # Simulate history-search-backward command.
     #
@@ -251,36 +215,33 @@ sub input_content_cb
     # incremental search.
     if ($backward) {
         $backward = 0;
+        my $mode  = weechat::config_string($conf{'search_mode'});
+        my $target;
 
-        my $mode = weechat::config_string($conf{'search_mode'});
+        $mode eq 'global' ? ($target = $mode)
+                          : ($target = $buffer);
 
-        $mode eq 'global' ? (@backward_hist = grep { /\A\Q$partial\E/ } $command_hist{$mode}->@*)
-                          : (@backward_hist = grep { /\A\Q$partial\E/ } $command_hist{$buffer}->@*);
-
-        $back_len = scalar @backward_hist;
-
-        wprint("\$search_pos: $search_pos");
-        wprint("\$back_len:   $back_len");
-        wprint('@backward_hist = ' . Dumper \@backward_hist);
+        @bwd_hist = grep { /\A\Q$partial\E/ } $cmd_hist{$target}->@*;
+        $bwd_len  = scalar @bwd_hist;
+        #wprint('@bwd_hist = ' . Dumper \@bwd_hist);
 
         # Delete the unique \034 char from input, so the cursor will stay in position
         # on subsequent backward searches.
         weechat::command('', '/input delete_previous_char');
 
-        if (@backward_hist) {
+        if (@bwd_hist) {
             # Ensure that the last command (0 index) is not ignored.
             if ($search_pos == 0 && ! $first) {
                 $first = 1;
                 ++$search_pos;
 
-                return $backward_hist[0];
+                return $bwd_hist[0];
             }
 
-            ++$search_pos if ($search_pos + 1 < $back_len);
-            wprint("\$search_pos: $search_pos");
+            ++$search_pos if ($search_pos + 1 < $bwd_len);
 
             # Replace input data with the command found in history.
-            return $backward_hist[$search_pos] if $backward_hist[$search_pos];
+            return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
         }
 
         # Remove the unique \034 char from string if command was not found in history.
@@ -297,11 +258,9 @@ sub input_content_cb
 
         weechat::command('', '/input delete_previous_char');
 
-        if (@backward_hist) {
+        if (@bwd_hist) {
             --$search_pos if ($search_pos > 0);
-            wprint("\$search_pos: $search_pos");
-
-            return $backward_hist[$search_pos] if $backward_hist[$search_pos];
+            return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
         }
 
         $string =~ s/\x{1c}//;
@@ -309,10 +268,10 @@ sub input_content_cb
     }
 
     # Reset
-    @backward_hist = ();
-    $back_len      = 0;
-    $first         = 0;
-    $search_pos    = 0;
+    @bwd_hist   = ();
+    $bwd_len    = 0;
+    $first      = 0;
+    $search_pos = 0;
 
     return $string;
 }
@@ -324,20 +283,9 @@ sub input_content_cb
 sub hs_backward_cb
 {
     my ($data, $buffer, $args) = @_;
+
     $backward = 1;
     $forward  = 0;
-
-    my $info = <<~_;
-        hs_backward_cb():
-          \$buffer:    $buffer
-          \$args:     '${args}'
-          \$backward:  $backward
-          \$forward:   ${forward}\n
-        _
-
-    wprint($info);
-    wprint('Ctrl+p was pressed');
-    wprint('');
 
     # Insert a unique \034 char to trigger the input_content_cb().
     weechat::command('', '/input insert \x1c');
@@ -352,22 +300,10 @@ sub hs_backward_cb
 sub hs_forward_cb
 {
     my ($data, $buffer, $args) = @_;
+
     $backward = 0;
     $forward  = 1;
 
-    my $info = <<~_;
-        hs_forward_cb():
-          \$buffer:    ${buffer}
-          \$args:     '${args}'
-          \$backward:  $backward
-          \$forward:   ${forward}\n
-        _
-
-    wprint($info);
-    wprint('Ctrl+n was pressed');
-    wprint('');
-
-    # Insert a unique \034 char to trigger the input_content_cb().
     weechat::command('', '/input insert \x1c');
 
     return $OK;
@@ -386,13 +322,13 @@ sub hs_list_cb
         my $key = weechat::infolist_string($infolist, 'key');
         my $cmd = weechat::infolist_string($infolist, 'command');
 
-        if ($cmd =~ m{\A/hist_search_(backward|forward)\z}) {
+        if ($cmd =~ m{\A/hist_search_(backward | forward)\z}x) {
             wprint("  '${key}' => '${cmd}'");
             next;
         }
     }
-
     weechat::infolist_free($infolist);
+
     return $OK;
 }
 
@@ -417,7 +353,7 @@ sub set_keybinds_cb
         ${PROG}\tKeys already bound to a command will be overwritten, and a warn displayed.
         ${PROG}\tIt is not safe to bind a key that do not start with a Ctrl or Meta key.
         ${PROG}\tTo insert a key name in the command line, use Alt+k, and then press the key to bind.
-        ${PROG}\tSee '/help key' for more details.
+        ${PROG}\tSee '/fset _readline' and '/help key' for details.
         END
 
     if ($hs_backward eq '') {
@@ -438,17 +374,13 @@ sub set_keybinds_cb
         my $infolist = weechat::infolist_get('key', '', 'default');
 
         while (weechat::infolist_next($infolist)) {
-            #my $fields = weechat::infolist_fields($infolist);
             my $key = weechat::infolist_string($infolist, 'key');
             my $cmd = weechat::infolist_string($infolist, 'command');
-
-            #wprint($fields);
-            #wprint("key:     '${key}'");
-            #wprint("command: '${cmd}'");
 
             if ($key =~ /\A(\Q$hs_backward\E | \Q$hs_forward\E)\z/xi) {
                 wprint("${PROG}\tkey '${key}' was bound to '${cmd}' command");
                 weechat::key_unbind('default', $key);
+
                 next;
             }
         }
@@ -577,18 +509,19 @@ sub config_init
                 'option'   => 'search_mode',
                 'name'     => 'mode',
                 'opt_type' => 'enum',
-                'desc'     => 'search in global history or buffer local history',
+                'desc'     => 'search command in local buffer history or global history',
                 'str_val'  => 'global|local',
                 'min_val'  => 0,
                 'max_val'  => 0,
-                'default'  => 'global',
-                'value'    => 'global',
+                'default'  => 'local',
+                'value'    => 'local',
                 'null_val' => 0,
             },
         );
         return 1 if set_opts($conf_file, $sect_dbg, \@OPT);
     }
 
+    #wprint('%conf = ' . Dumper \%conf);
     return 0;
 }
 
@@ -611,7 +544,6 @@ if (weechat::register(
         # Set the keybinds.
         return if set_keybinds_cb() == $ERR;
 
-        wprint('%conf = ' . Dumper \%conf);
         # Populate the command history.
         init_cmdhist_cb();
     }
@@ -619,9 +551,10 @@ if (weechat::register(
     # Hooks
     {
         # Update an option when it changes.
-        weechat::hook_config("${PROG}.key.search_*", 'set_keybinds_cb', '');
-        weechat::hook_config("${PROG}.search.mode",  'init_cmdhist_cb', '');
+        weechat::hook_config("${PROG}.key.search_*", 'set_keybinds_cb', '');  # Keybinds
+        weechat::hook_config("${PROG}.search.mode",  'init_cmdhist_cb', '');  # Modes: global/local
 
+        # Command-line
         weechat::hook_modifier('input_text_display', 'input_display_cb', '');
         weechat::hook_modifier('input_text_content', 'input_content_cb', '');
         weechat::hook_modifier('history_add', 'history_add_cb', '');
@@ -656,7 +589,7 @@ if (weechat::register(
         # hslist
         weechat::hook_command(
             'hslist',
-            'List keyboard keys that are currently bound to the hist_search_backward/forward commands.',
+            'list keyboard keys currently bound to the hist_search_backward/forward commands',
             'hslist',
             '',
             '',
