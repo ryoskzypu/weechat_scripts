@@ -5,8 +5,7 @@
 # histsearch_readline.pl — simulate GNU's Readline history search commands
 #
 # Description:
-#   Simulate GNU's Readline history-search-backward and history-search-forward
-#   commands.
+#   Simulate GNU's Readline history-search-backward and history-search-forward commands.
 #   See:
 #     https://wiki.archlinux.org/title/Readline#History
 #     https://man.archlinux.org/man/readline.3#history~3
@@ -86,25 +85,22 @@ sub update_cmdhist
     my ($buffer, $string, $mode) = @_;
     my $target;
 
-    # Global
     if ($mode eq 'global') {
-        $cmd_hist{$mode} = [];
-        $buffer          = '';
-        $target          = $mode;
+        $buffer = '';
+        $target = $mode;
     }
     # Local
     else {
-        $cmd_hist{$buffer} = [];
         $target = $buffer;
     }
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
+    $cmd_hist{$target} = [];
 
     my $infolist = weechat::infolist_get('history', $buffer, '');
 
     while (weechat::infolist_next($infolist)) {
         # Get command and strip leading and trailing whitespace.
         my $cmd = trim(weechat::infolist_string($infolist, 'text'));
-
         push $cmd_hist{$target}->@*, $cmd;
     }
     weechat::infolist_free($infolist);
@@ -123,10 +119,10 @@ sub init_cmdhist_cb
 
     %cmd_hist = ();
     my $mode  = weechat::config_string($conf{'search_mode'});
-    my %seen;
 
     # Global history
     if ($mode eq 'global') {
+        my %seen;
         my $infolist = weechat::infolist_get('history', '', '');
 
         while (weechat::infolist_next($infolist)) {
@@ -148,6 +144,7 @@ sub init_cmdhist_cb
         }
 
         while (weechat::infolist_next($buffers)) {
+            my %seen;
             my $buf_ptr  = weechat::infolist_pointer($buffers, 'pointer');
             my $infolist = weechat::infolist_get('history', $buf_ptr, '');
 
@@ -189,6 +186,19 @@ sub history_add_cb
     return $string;
 }
 
+# Remove local buffer callback
+#
+# Whenever a buffer is closed, remove its command history from the command history hash.
+sub rm_localbuf_cb
+{
+    my ($data, $signal, $buffer) = @_;
+
+    delete $cmd_hist{$buffer};
+    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
+
+    return $OK;
+}
+
 # Input display callback
 #
 # Get the current input cursor position.
@@ -224,8 +234,11 @@ sub input_content_cb
         $mode eq 'global' ? ($target = $mode)
                           : ($target = $buffer);
 
-        @bwd_hist = grep { /\A\Q$partial\E/ } $cmd_hist{$target}->@*;
-        $bwd_len  = scalar @bwd_hist;
+        if (exists $cmd_hist{$target}) {
+            @bwd_hist = grep { /\A\Q$partial\E/ } $cmd_hist{$target}->@*;
+            $bwd_len  = scalar @bwd_hist;
+        }
+        #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
         #wprint('@bwd_hist = ' . Dumper \@bwd_hist);
 
         # Delete the unique escape char from input, so the cursor will stay in
@@ -241,7 +254,8 @@ sub input_content_cb
                 return $bwd_hist[0];
             }
 
-            ++$search_pos if ($search_pos + 1 < $bwd_len);
+            ++$search_pos if (! $first && $search_pos + 1 < $bwd_len);
+            $first = 0;
 
             # Replace input data with the command found in history.
             return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
@@ -281,8 +295,7 @@ sub input_content_cb
 
 # History search backward callback
 #
-# When called, set the backward flags and trigger the input_content_cb() to process
-# input data.
+# When called, set the backward flags and trigger the input_content_cb() to process input data.
 sub hs_backward_cb
 {
     my ($data, $buffer, $args) = @_;
@@ -376,8 +389,7 @@ sub set_keybinds_cb
         return $ERR;
     }
 
-    # Unbind keys that were bound to a command other than /hist_search_* and inform
-    # the user.
+    # Unbind keys that were bound to a command other than /hist_search_* and inform the user.
     {
         my $infolist = weechat::infolist_get('key', '', 'default');
 
@@ -566,6 +578,7 @@ if (weechat::register(
         weechat::hook_modifier('input_text_display', 'input_display_cb', '');
         weechat::hook_modifier('input_text_content', 'input_content_cb', '');
         weechat::hook_modifier('history_add', 'history_add_cb', '');
+        weechat::hook_signal('buffer_closed', 'rm_localbuf_cb', '');
 
         # Commands
         #
