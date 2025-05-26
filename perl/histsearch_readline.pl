@@ -20,7 +20,7 @@
 #
 # History:
 #   2025-05-25, ryoskzypu <ryoskzypu@proton.me>:
-#     version 1.0: initial release (Idea by skejg, thanks)
+#     version 1.0.0: initial release (Idea by skejg, thanks)
 
 use v5.26.0;
 
@@ -80,6 +80,31 @@ sub wprint
     weechat::print('', $str);
 }
 
+# Deduplicate a command history array reference.
+sub dedup
+{
+    my ($arr_ref) = @_;
+    my %seen;
+
+    return [ grep { ! $seen{$_}++ } $arr_ref->@* ];
+}
+
+# Populate a command history array reference.
+sub push_cmdhist
+{
+    my ($buffer, $mode) = @_;
+    my $infolist = weechat::infolist_get('history', $buffer, '');
+
+    while (weechat::infolist_next($infolist)) {
+        # Get command and strip leading and trailing whitespace.
+        my $cmd = trim(weechat::infolist_string($infolist, 'text'));
+
+        push $cmd_hist{$mode}->@*, $cmd;
+    }
+
+    weechat::infolist_free($infolist);
+}
+
 # Update the current global history or local buffer history data.
 sub update_cmdhist
 {
@@ -94,17 +119,11 @@ sub update_cmdhist
     else {
         $target = $buffer;
     }
+
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
+
     $cmd_hist{$target} = [];
-
-    my $infolist = weechat::infolist_get('history', $buffer, '');
-
-    while (weechat::infolist_next($infolist)) {
-        # Get command and strip leading and trailing whitespace.
-        my $cmd = trim(weechat::infolist_string($infolist, 'text'));
-        push $cmd_hist{$target}->@*, $cmd;
-    }
-    weechat::infolist_free($infolist);
+    push_cmdhist($buffer, $target);
 
     return $target;
 }
@@ -123,17 +142,10 @@ sub init_cmdhist_cb
 
     # Global history
     if ($mode eq 'global') {
-        my %seen;
-        my $infolist = weechat::infolist_get('history', '', '');
+        push_cmdhist('', $mode);
 
-        while (weechat::infolist_next($infolist)) {
-            my $cmd = trim(weechat::infolist_string($infolist, 'text'));
-            push $cmd_hist{$mode}->@*, $cmd;
-        }
-        weechat::infolist_free($infolist);
-
-        # Deduplicate the global command hist array.
-        $cmd_hist{$mode} = [ grep { ! $seen{$_}++ } $cmd_hist{$mode}->@* ];
+        # Dedup the global command hist array.
+        $cmd_hist{$mode} = dedup($cmd_hist{$mode});
     }
     # Local buffer history
     else {
@@ -145,18 +157,11 @@ sub init_cmdhist_cb
         }
 
         while (weechat::infolist_next($buffers)) {
-            my %seen;
             my $buf_ptr  = weechat::infolist_pointer($buffers, 'pointer');
-            my $infolist = weechat::infolist_get('history', $buf_ptr, '');
+            push_cmdhist($buf_ptr, $buf_ptr);
 
-            while (weechat::infolist_next($infolist)) {
-                my $cmd = trim(weechat::infolist_string($infolist, 'text'));
-                push $cmd_hist{$buf_ptr}->@*, $cmd;
-            }
-            weechat::infolist_free($infolist);
-
-            # Deduplicate the local buffer's command hist array.
-            $cmd_hist{$buf_ptr} = [ grep { ! $seen{$_}++ } $cmd_hist{$buf_ptr}->@* ];
+            # Dedup the local buffer's command hist array.
+            $cmd_hist{$buf_ptr} = dedup($cmd_hist{$buf_ptr});
         }
         weechat::infolist_free($buffers);
     }
@@ -174,14 +179,14 @@ sub history_add_cb
 
     my $mode   = weechat::config_string($conf{'search_mode'});
     my $target = update_cmdhist($buffer, $string, $mode);
-    my %seen;
 
     # Add the command to history.
     $string = trim $string;
     unshift $cmd_hist{$target}->@*, $string;
 
-    # Deduplicate the command hist array from the respective target mode.
-    $cmd_hist{$target} = [ grep { ! $seen{$_}++ } $cmd_hist{$target}->@* ];
+    # Dedup the command hist array from the respective target mode.
+    $cmd_hist{$target} = dedup($cmd_hist{$target});
+
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
 
     return $string;
@@ -195,8 +200,8 @@ sub rm_localbuf_cb
     my ($data, $signal, $buffer) = @_;
 
     delete $cmd_hist{$buffer};
-    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
 
+    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
     return $OK;
 }
 
@@ -367,19 +372,20 @@ sub set_keybinds_cb
     my $key_bwd = weechat::config_string($conf{'hist_search_backward'});
     my $key_fwd = weechat::config_string($conf{'hist_search_forward'});
 
-    my $info = <<~"END";
-        ${PROG}\t
-        ${PROG}\tNote that both backward and forward keybinds must be set, and the script reloaded after.
-        ${PROG}\tE.g.
-        ${PROG}\t  /set histsearch_readline.key.search_backward "ctrl-p"
-        ${PROG}\t  /set histsearch_readline.key.search_forward  "ctrl-n"
-        ${PROG}\t  /script reload histsearch_readline.pl
-        ${PROG}\t
-        ${PROG}\tKeys already bound to a command will be overwritten, and a warn displayed.
-        ${PROG}\tIt is not safe to bind a key that do not start with a Ctrl or Meta key.
-        ${PROG}\tTo insert a key name in the command line, use Alt+k, and then press the key to bind.
-        ${PROG}\tSee '/fset _readline' and '/help key' for details.
+    (my $info = <<~'END'
+
+        Note that both backward and forward keybinds must be set, and the script reloaded after.
+        E.g.
+          /set histsearch_readline.key.search_backward "ctrl-p"
+          /set histsearch_readline.key.search_forward  "ctrl-n"
+          /script reload histsearch_readline.pl
+
+        Keys already bound to a command will be overwritten, and a warn displayed.
+        It is not safe to bind a key that do not start with a Ctrl or Meta key.
+        To insert a key name in the command line, use Alt+k, and then press the key to bind.
+        See '/fset _readline' and '/help key' for details.
         END
+    ) =~ s/^/${PROG}\t/mg;  # Insert the script's name prefix at every start of lines.
 
     if ($key_bwd eq '') {
         wprint("${PROG}\tkeybind for history-search-backward is not set");
