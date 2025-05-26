@@ -63,6 +63,7 @@ my $input_pos  = 0;
 my $search_pos = 0;
 my $bwd_len    = 0;
 my $first      = 0;
+my $fwd_cycle  = 0;
 
 # Unique escape char
 my $UNIQ_ESC = "\o{034}";
@@ -246,8 +247,9 @@ sub input_content_cb
         weechat::command('', '/input delete_previous_char');
 
         if (@bwd_hist) {
-            # Ensure that the last command (0 index) is not ignored.
-            if ($search_pos == 0 && ! $first) {
+            # Ensure that the last command (0 index) is not ignored and is not
+            # returned after a search forward command cycle.
+            if ($search_pos == 0 && ! $first && ! $fwd_cycle) {
                 $first = 1;
                 ++$search_pos;
 
@@ -255,7 +257,8 @@ sub input_content_cb
             }
 
             ++$search_pos if (! $first && $search_pos + 1 < $bwd_len);
-            $first = 0;
+            $first     = 0;
+            $fwd_cycle = 0;
 
             # Replace input data with the command found in history.
             return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
@@ -277,6 +280,8 @@ sub input_content_cb
 
         if (@bwd_hist) {
             --$search_pos if ($search_pos > 0);
+            $fwd_cycle = 1 if $search_pos == 0;  # Track the search forward command cycle.
+
             return $bwd_hist[$search_pos] if $bwd_hist[$search_pos];
         }
 
