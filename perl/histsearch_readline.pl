@@ -66,7 +66,7 @@ my $first      = 0;
 my $fwd_cycle  = 0;
 
 # Unique escape char
-my $UNIQ_ESC = "\o{034}";
+my $UNIQ_ESC = "\o{036}";
 
 # Regexes
 my $HS_CMD_RGX = qr{ \A/hist_search_(backward | forward)\z }x;
@@ -188,7 +188,6 @@ sub history_add_cb
     $cmd_hist{$target} = dedup($cmd_hist{$target});
 
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
-
     return $string;
 }
 
@@ -313,8 +312,8 @@ sub hs_backward_cb
     $backward = 1;
     $forward  = 0;
 
-    # Insert a unique \034 escape char (\x1c in hex) to trigger the input_content_cb().
-    weechat::command('', '/input insert \x1c');
+    # Insert a unique \036 escape char (\x1e in hex) to trigger the input_content_cb().
+    weechat::command('', '/input insert \x1e');
 
     return $OK;
 }
