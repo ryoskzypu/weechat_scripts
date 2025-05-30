@@ -92,38 +92,44 @@ sub dedup
 # Populate a command history array reference.
 sub push_cmdhist
 {
-    my ($buffer, $mode) = @_;
-    my $infolist = weechat::infolist_get('history', $buffer, '');
+    my ($hdata_hist, $buffer, $mode) = @_;
 
-    while (weechat::infolist_next($infolist)) {
+    while ($buffer) {
         # Get command and strip leading and trailing whitespace.
-        my $cmd = trim(weechat::infolist_string($infolist, 'text'));
+        my $cmd = trim(weechat::hdata_string($hdata_hist, $buffer, 'text'));
 
         push $cmd_hist{$mode}->@*, $cmd;
+        $buffer = weechat::hdata_move($hdata_hist, $buffer, 1);
     }
-
-    weechat::infolist_free($infolist);
 }
 
 # Update the current global history or local buffer history data.
 sub update_cmdhist
 {
-    my ($buffer, $string, $mode) = @_;
+    my ($buffer, $mode) = @_;
+    my $hdata_hist = weechat::hdata_get('history');
+    my $hdata;
     my $target;
 
     if ($mode eq 'global') {
-        $buffer = '';
+        my $hist_list = weechat::hdata_get_list($hdata_hist, 'gui_history');
+
+        $hdata  = $hist_list;
         $target = $mode;
     }
     # Local
     else {
+        my $hdata_buf   = weechat::hdata_get('buffer');
+        my $bufhist_ptr = weechat::hdata_pointer($hdata_buf, $buffer, 'history');
+
+        $hdata  = $bufhist_ptr;
         $target = $buffer;
     }
 
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
 
     $cmd_hist{$target} = [];
-    push_cmdhist($buffer, $target);
+    push_cmdhist($hdata_hist, $hdata, $target);
 
     return $target;
 }
@@ -136,13 +142,20 @@ sub update_cmdhist
 sub init_cmdhist_cb
 {
     my ($data, $option, $value) = @_;
-
     %cmd_hist = ();
-    my $mode  = weechat::config_string($conf{'search_mode'});
+
+    my $mode       = weechat::config_string($conf{'search_mode'});
+    my $hdata_hist = weechat::hdata_get('history');
 
     # Global history
     if ($mode eq 'global') {
-        push_cmdhist('', $mode);
+        my $hist_list  = weechat::hdata_get_list($hdata_hist, 'gui_history');
+        if (! $hist_list) {
+            wprint("${PROG}\tfailed to get global history list");
+            return $ERR;
+        }
+
+        push_cmdhist($hdata_hist, $hist_list, $mode);
 
         # Dedup the global command hist array.
         $cmd_hist{$mode} = dedup($cmd_hist{$mode});
@@ -150,20 +163,20 @@ sub init_cmdhist_cb
     # Local buffer history
     else {
         # Get list of buffers.
-        my $buffers = weechat::infolist_get('buffer', '', '');
+        my $hdata_buf = weechat::hdata_get('buffer');
+        my $buffers   = weechat::hdata_get_list($hdata_buf, 'gui_buffers');
+
         if (! $buffers) {
             wprint("${PROG}\tfailed to get list of buffers");
             return $ERR;
         }
 
-        while (weechat::infolist_next($buffers)) {
-            my $buf_ptr  = weechat::infolist_pointer($buffers, 'pointer');
-            push_cmdhist($buf_ptr, $buf_ptr);
+        while ($buffers) {
+            my $bufhist_ptr = weechat::hdata_pointer($hdata_buf, $buffers, 'history');
+            push_cmdhist($hdata_hist, $bufhist_ptr, $buffers);
 
-            # Dedup the local buffer's command hist array.
-            $cmd_hist{$buf_ptr} = dedup($cmd_hist{$buf_ptr});
+            $buffers = weechat::hdata_move($hdata_buf, $buffers, 1);
         }
-        weechat::infolist_free($buffers);
     }
 
     #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
@@ -178,7 +191,7 @@ sub history_add_cb
     my ($data, $modifier, $buffer, $string) = @_;
 
     my $mode   = weechat::config_string($conf{'search_mode'});
-    my $target = update_cmdhist($buffer, $string, $mode);
+    my $target = update_cmdhist($buffer, $mode);
 
     # Add the command to history.
     $string = trim $string;
