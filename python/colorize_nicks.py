@@ -104,6 +104,12 @@
 #   version 0.1: initial (based on ruby script by dominikh)
 #
 # TODO:
+#   - It seems that the script is memory hungry, so test weechat without scripts
+#     to assert this. Try to fix it if true, it will be most likely because of
+#     python's lists/dict size.
+#
+#   - Add an option to do case-insensitive matching.
+#
 #   - Because many people could still be using python < 3.11, do not add the atomic
 #     and possessive regex constructs until Debian, Ubuntu, and Fedora phase out
 #     their LTS distros that still support python < 3.11.
@@ -824,59 +830,66 @@ def populate_nicks_cb(*args):
     ''' Callback that fills the colored nicks dict with all nicks weechat can see,
     and what color and prefix it has assigned to it. '''
 
-    bufname      = ''
+    if colored_nicks:
+        colored_nicks.clear()
+
     prefix_color = ''
     nick_prefix  = ''
     irc_only     = w.config_boolean(config_option['irc_only'])
 
-    # Get nicks only in IRC buffers.
-    if irc_only:
-        bufname = 'irc.*'
+    hdata_buf     = w.hdata_get('buffer')
+    hdata_nick    = w.hdata_get('nick')
+    hdata_nickgrp = w.hdata_get('nick_group')
 
     # Get list of buffers.
-    if not (buffers := w.infolist_get('buffer', '', bufname)):
+    if not (buffers := w.hdata_get_list(hdata_buf, 'gui_buffers')):
         w.prnt('', f'{SCRIPT_NAME}\tfailed to get list of buffers')
         return ERR
 
-    while w.infolist_next(buffers):
-        buffer_ptr = w.infolist_pointer(buffers, 'pointer')
-        channel    = w.buffer_get_string(buffer_ptr, 'localvar_channel')
+    while buffers:
+        channel      = w.buffer_get_string(buffers, 'localvar_channel')
+        plugin       = w.buffer_get_string(buffers, 'localvar_plugin')
+        nicklist_ptr = w.hdata_pointer(hdata_buf, buffers, 'nicklist_root')
+        children     = w.hdata_pointer(hdata_nickgrp, nicklist_ptr, 'children')
 
         # Skip non-IRC channel buffers.
-        if irc_only and not w.info_get('irc_is_channel', channel):
+        if irc_only and not plugin == 'irc' or not w.info_get('irc_is_channel', channel):
+            buffers = w.hdata_move(hdata_buf, buffers, 1)
             continue
 
-        my_nick = w.buffer_get_string(buffer_ptr, 'localvar_nick')
+        my_nick = w.buffer_get_string(buffers, 'localvar_nick')
 
-        if (nicklist := w.infolist_get('nicklist', buffer_ptr, '')):
-            while w.infolist_next(nicklist):
-                if buffer_ptr not in colored_nicks:
-                    colored_nicks[buffer_ptr] = {}
+        # Nick groups
+        while children:
+            child = w.hdata_pointer(hdata_nickgrp, children, 'nicks')
 
-                # Skip nick groups.
-                if w.infolist_string(nicklist, 'type') != 'nick':
-                    continue
+            # Nicks
+            while child:
+                if buffers not in colored_nicks:
+                    colored_nicks[buffers] = {}
 
                 # Get nicks colors.
-                nick       = w.infolist_string(nicklist, 'name')
-                nick_color = get_nick_color(buffer_ptr, nick, my_nick)
+                nick       = w.hdata_string(hdata_nick, child, 'name')
+                nick_color = get_nick_color(buffers, nick, my_nick)
 
                 # Get nicks prefixes.
-                prefix = w.infolist_string(nicklist, 'prefix')
+                prefix = w.hdata_string(hdata_nick, child, 'prefix')
                 if prefix != SPACE:
-                    prefix_color = w.color(w.infolist_string(nicklist, 'prefix_color'))
+                    prefix_color = w.color(w.hdata_string(hdata_nick, child, 'prefix_color'))
                     nick_prefix  = f'{prefix_color}{prefix}'
 
                 # Populate
-                colored_nicks[buffer_ptr][nick] = {
+                colored_nicks[buffers][nick] = {
                         'color':  nick_color,
                         'prefix': nick_prefix,
                 }
                 nick_prefix = ''
 
-        w.infolist_free(nicklist)
+                child = w.hdata_move(hdata_nick, child, 1)
 
-    w.infolist_free(buffers)
+            children = w.hdata_move(hdata_nickgrp, children, 1)
+
+        buffers = w.hdata_move(hdata_buf, buffers, 1)
 
     #w.prnt('', 'colored_nicks:\n' + pp.pformat(colored_nicks))
 
@@ -898,22 +911,18 @@ def add_nick_cb(data, signal, signal_data):
 
     # Get nick prefix.
     nick_prefix = ''
-    if (nicklist := w.infolist_get('nicklist', buffer, f'nick_{nick}')):
-        while w.infolist_next(nicklist):
-            prefix = w.infolist_string(nicklist, 'prefix')
+    if (nick_ptr := w.nicklist_search_nick(buffer, '', nick)):
+        prefix = w.nicklist_nick_get_string(buffer, nick_ptr, 'prefix')
 
-            if prefix != SPACE:
-                prefix_color = w.color(w.infolist_string(nicklist, 'prefix_color'))
-                nick_prefix  = f'{prefix_color}{prefix}'
+        if prefix != SPACE:
+            prefix_color = w.color(w.nicklist_nick_get_string(buffer, nick_ptr, 'prefix_color'))
+            nick_prefix  = f'{prefix_color}{prefix}'
 
     # Update
     colored_nicks[buffer][nick] = {
             'color':  nick_color,
             'prefix': nick_prefix,
     }
-
-    w.infolist_free(nicklist)
-    w.infolist_free(buffer)
 
     #w.prnt('', 'colored_nicks:\n' + pp.pformat(colored_nicks))
 
