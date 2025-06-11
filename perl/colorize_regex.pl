@@ -904,9 +904,7 @@ sub comp_action_cb
 sub notify_cb
 {
     my ($data, $hashref) = @_;
-
-    $hashref->{'notify_level'} = 1;  # Message
-    return $hashref;
+    return {'notify_level' => 1};  # Message
 }
 
 # Colorize callback
@@ -950,51 +948,44 @@ sub notify_cb
 #      cases. It should colorize the matches and preserve all colors.
 sub colorize_cb
 {
-    my ($data, $hashref) = @_;
-
-    my $PREFIX    = "colorize_cb\t";
-    my $buffer    = $hashref->{'buffer'};
-    my $filtered  = $hashref->{'displayed'};
-    my $highlight = $hashref->{'highlight'};
-    my $message   = $hashref->{'message'};
-    my $msg_nocolor;
+    my ($data, $buffer, $date, $tags, $displayed, $highlight, $prefix, $message) = @_;
 
     # Do not colorize when a message is filtered.
-    return $hashref if $filtered eq '0' && wstr($conf{'colorize_filter'}) eq 'off';
-
-    # Remove any color codes from message in order to match and colorize the
-    # strings correctly.
-    $msg_nocolor = weechat::string_remove_color($message, '');
-
-    # Assert that the message string has any match from 'highlight_regex' option.
-    my $hl_opt = weechat::string_has_highlight_regex($msg_nocolor, $re_opt_pat);
-
-    # Get 'highlight_regex' pattern from buffer property and assert that there is
-    # a match in the message.
-    my $re_prop_pat = weechat::buffer_get_string($buffer, 'highlight_regex');
-    my $hl_prop     = weechat::string_has_highlight_regex($msg_nocolor, $re_prop_pat);
-
-    # Decode the pattern byte string to UTF-8, so Unicode strings can be correctly
-    # matched in perl regexes.
-    $re_prop_pat = decode 'UTF-8', $re_prop_pat;
+    return $OK if ! $displayed && wstr($conf{'colorize_filter'}) eq 'off';
 
     # Start processing if the message has a highlight.
-    if ($highlight eq '1') {
-        # and has a regex match.
-        return $hashref if ! $hl_opt && ! $hl_prop;
-
-        my $bufname = $hashref->{'buffer_name'};
-        my $tags    = $hashref->{'tags'};
-        my ($nick)  = $tags =~ /,nick_([^,]++),/;
+    if ($highlight) {
+        my $PREFIX = "colorize_cb\t";
         my $new_msg;
 
-        my $info = <<~_;
+        # Remove any color codes from message in order to match and colorize the
+        # strings correctly.
+        my $msg_nocolor = weechat::string_remove_color($message, '');
+
+        # Assert that the message string has any match from 'highlight_regex' option.
+        my $hl_opt = weechat::string_has_highlight_regex($msg_nocolor, $re_opt_pat);
+
+        # Get 'highlight_regex' pattern from buffer property and assert that there is
+        # a match in the message.
+        my $re_prop_pat = weechat::buffer_get_string($buffer, 'highlight_regex');
+        my $hl_prop     = weechat::string_has_highlight_regex($msg_nocolor, $re_prop_pat);
+
+        return $OK if ! $hl_opt && ! $hl_prop;
+
+        # Decode the pattern byte string to UTF-8, so Unicode strings can be correctly
+        # matched in perl regexes.
+        $re_prop_pat = decode 'UTF-8', $re_prop_pat;
+
+        # Print buffer and nick information in debug mode.
+        if (wstr($conf{'debug_mode'}) eq 'on') {
+            my $bufname = weechat::buffer_get_string($buffer, 'localvar_name');
+            my ($nick)  = $tags =~ /,nick_([^,]++),/;
+
+            my $info = <<~_;
             ${PREFIX}buffer: $bufname
             nick:   $nick
             _
 
-        # Print buffer and nick information in debug mode.
-        if (wstr($conf{'debug_mode'}) eq 'on') {
             chkbuff();
             wprint('', $info);
         }
@@ -1031,7 +1022,7 @@ sub colorize_cb
             # Re-encode the $msg_nocolor string to bytes, so Unicode strings are
             # split correctly (per byte).
             $msg_nocolor = encode 'UTF-8', $msg_nocolor;
-            pdbg($PREFIX, '$msg_nocolor', 1, $msg_nocolor);
+            #pdbg($PREFIX, '$msg_nocolor', 1, $msg_nocolor);
 
             # Split all color codes and bytes from the messages.
             my @split_msg    = grep { defined $_ && $_ ne '' } split /$SPLIT_RGX/, $message;
@@ -1121,14 +1112,23 @@ sub colorize_cb
         # Debug the colorized message.
         pdbg($PREFIX, '$new_msg', 1, $new_msg);
 
-        # Update the hashtable.
-        $hashref->{'message'} = $new_msg;
+        # Update the message.
+
+        my $own_lines = weechat::hdata_pointer(weechat::hdata_get('buffer'), $buffer, 'own_lines');
+
+        if ($own_lines) {
+            my $line = weechat::hdata_pointer(weechat::hdata_get('lines'), $own_lines, 'last_line');
+
+            if ($line) {
+                my $line_data = weechat::hdata_pointer(weechat::hdata_get('line'), $line, 'data');
+                my $hdata     = weechat::hdata_get('line_data');
+                weechat::hdata_update($hdata, $line_data, {'message' => $new_msg});
+            }
+        }
     }
 
-    # Debug the hashtable.
-    #wprint('', "${PREFIX}\$hashref = " . Dumper $hashref);
-
-    return $hashref;
+    #pdbg($PREFIX, '$message', 1, $message);
+    return $OK;
 }
 
 # Update colors callback
@@ -1372,11 +1372,11 @@ if (weechat::register(
     # Hooks
     {
         # Update an option when it changes.
-        weechat::hook_config("${PROG}.color.*", 'upd_colors_cb', '');  # Regex match color
-        weechat::hook_config($REGEX_OPT, 'get_regex_cb', '');          # highlight_regex
+        weechat::hook_config("${PROG}.color.*", 'upd_colors_cb', '');     # Regex match color
+        weechat::hook_config($REGEX_OPT, 'get_regex_cb', '');             # highlight_regex
 
-        weechat::hook_line('400|', '', '', 'colorize_cb', '');         # Colorize
-        weechat::hook_line('', "perl.$PROG", '', 'notify_cb', '');     # Notify
+        weechat::hook_print('400|', 'nick_*', '', 0, 'colorize_cb', '');  # Colorize
+        weechat::hook_line('', "perl.$PROG", '', 'notify_cb', '');        # Notify
 
         # Commands
         {
