@@ -104,10 +104,6 @@
 #   version 0.1: initial (based on ruby script by dominikh)
 #
 # TODO:
-#   - It seems that the script is memory hungry, so test weechat without scripts
-#     to assert this. Try to fix it if true, it will be most likely because of
-#     python's lists/dict size.
-#
 #   - Add an option to do case-insensitive matching.
 #
 #   - Because many people could still be using python < 3.11, do not add the atomic
@@ -470,6 +466,13 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
     ''' Finds every nick from the dict of colored nicks, in the line and colorizes
     them. '''
 
+    nicks_pat = rf'''
+                    [{prefixes}]?      # Optional prefix char
+                    (?P<nick> [^ ]++)
+                '''
+    nicks_rgx = re.compile(nicks_pat, flags=re.VERBOSE)
+    sfx_rgx   = re.compile(rf'[{suffixes}]$')
+
     chop_line            = line
     chop_match           = ''
     chop_match_after     = ''
@@ -494,11 +497,7 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
             continue
 
         # Get possible nick from word.
-        nicks_rgx = rf'''
-                        [{prefixes}]?      # Optional prefix char
-                        (?P<nick> [^ ]++)
-                     '''
-        if (nick := re.search(nicks_rgx, word, flags=re.VERBOSE)) is not None:
+        if (nick := nicks_rgx.search(word)) is not None:
             nick = nick.group('nick')
 
         # If the word is not a known nick and its last character is an option
@@ -506,7 +505,7 @@ def colorize_nicks(buffer, min_len, prefixes, suffixes, has_colors, line):
         # This is necessary as 'foo:' is a valid nick, which could be addressed
         # as 'foo::'.
         if nick not in colored_nicks[buffer]:
-            if (suffix := re.search(rf'[{suffixes}]$', re.escape(nick))) is not None:
+            if (suffix := sfx_rgx.search(re.escape(nick))) is not None:
                 nick = nick[:-1]
 
         # Nick exists on buffer.
@@ -784,10 +783,8 @@ def colorize_cb(data, hashtable):
     # Debug the hashtable.
     #w.prnt('', 'hashtable:\n' + pp.pformat(hashtable))
 
-    # Update the hashtable.
-    hashtable['message'] = message
-
-    return hashtable
+    # Update the message in hashtable.
+    return {'message': message}
 
 def colorize_input_cb(data, modifier, modifier_data, line):
     ''' Callback that does the colorizing of nicks from weechat's input. '''
@@ -990,7 +987,7 @@ if __name__ == '__main__':
         # Hooks
 
         # Colorize nicks.
-        w.hook_line('', '', '', 'colorize_cb', '')                          # Message
+        w.hook_line('', '', 'nick_*', 'colorize_cb', '')                    # Message
         w.hook_modifier('250|input_text_display', 'colorize_input_cb', '')  # Input
 
         # Update nicks.
