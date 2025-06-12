@@ -185,7 +185,6 @@ sub init_cmdhist_cb
 
 # History add callback
 #
-# Update the command history hash whenever a command is run.
 sub history_add_cb
 {
     my ($data, $modifier, $buffer, $string) = @_;
@@ -200,7 +199,7 @@ sub history_add_cb
     # Dedup the command hist array from the respective target mode.
     $cmd_hist{$target} = dedup($cmd_hist{$target});
 
-    #wprint('%cmd_hist = ' . Dumper \%cmd_hist);
+    $search_pos = 0;
     return $string;
 }
 
@@ -342,7 +341,7 @@ sub hs_forward_cb
     $backward = 0;
     $forward  = 1;
 
-    weechat::command('', '/input insert \x1c');
+    weechat::command('', '/input insert \x1e');
 
     return $OK;
 }
@@ -598,9 +597,9 @@ if (weechat::register(
         weechat::hook_config("${PROG}.search.mode",  'init_cmdhist_cb', '');  # Modes: global, local
 
         # Command-line
-        weechat::hook_modifier('input_text_display', 'input_display_cb', '');
-        weechat::hook_modifier('input_text_content', 'input_content_cb', '');
         weechat::hook_modifier('history_add', 'history_add_cb', '');
+        weechat::hook_modifier('900|input_text_display', 'input_display_cb', '');
+        weechat::hook_modifier('800|input_text_content', 'input_content_cb', '');
         weechat::hook_signal('buffer_closed', 'rm_localbuf_cb', '');
 
         # Commands
