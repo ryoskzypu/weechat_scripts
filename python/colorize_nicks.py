@@ -151,9 +151,10 @@ colored_nicks = {}
 
 # Regexes
 
-RESET_RGX      = r'\034'
-RES_KEEP_RGX   = r'\031\034'                        # Reset color and keep attributes
-SPELL_MISS_RGX = r'\031bF'                          # Misspelled end color (Spell plugin)
+RESET_RGX       = r'\034'
+RES_KEEP_RGX    = r'\031\034'                       # Reset color and keep attributes
+SPELL_MISS_RGX  = r'\031bF'                         # Misspelled end color (Spell plugin)
+EXACT_SPELL_RGX = rf'\A{SPELL_MISS_RGX}\Z'
 
 COLORS_RGX = r'''
                  \031
@@ -214,6 +215,7 @@ regex = {
         'is_color':      IS_COLOR_RGX,
         'exact_color':   EXACT_COLOR_RGX,
         'horizontal_ws': HORIZONTAL_WS_RGX,
+        'exact_spell':   EXACT_SPELL_RGX,
 }
 
 # Reset color code
@@ -610,9 +612,10 @@ def preserve_colors(line, colorized_nicks_line):
     split_line_nc = [y for y in regex['split'].split(colorized_nicks_line) if y is not None and y]
 
     # Since the spell plugin colorizes misspelled strings in the command-line, its
-    # end code must be replaced with reset color + keep attributes when the colorize_input
-    # option is set, otherwise it will colorize everything in the input.
-    split_line = [re.sub(rf'\A{SPELL_MISS_RGX}\Z', rf'{RES_KEEP_RGX}', z) if not None else z for z in split_line]
+    # end code must be replaced with reset color + keep attributes when colorize_input
+    # option is set, otherwise it will colorize subsequent strings in the input.
+    if w.config_boolean(config_option['colorize_input']):
+        split_line = [regex['exact_spell'].sub(rf'{RES_KEEP_RGX}', z) if not None else z for z in split_line]
 
     # Debug split lists.
     #w.prnt('', f'split_line:'    + pp.pformat(split_line))
