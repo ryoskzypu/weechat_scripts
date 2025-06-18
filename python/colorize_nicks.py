@@ -151,6 +151,10 @@ colored_nicks = {}
 
 # Regexes
 
+RESET_RGX      = r'\034'
+RES_KEEP_RGX   = r'\031\034'                        # Reset color and keep attributes
+SPELL_MISS_RGX = r'\031bF'                          # Misspelled end color (Spell plugin)
+
 COLORS_RGX = r'''
                  \031
                  (?>
@@ -173,21 +177,22 @@ COLORS_RGX = r'''
                      )
                  )
              '''
-ATTR_RGX   = r'''
+ATTR_RGX   = rf'''
                  (?> \032 | \033)
                  [\001-\006]
                  |
-                 \031\034                       # Reset color and keep attributes
+                 {RES_KEEP_RGX}
              '''
-RESET_RGX  = r'\034'
 SPLIT_RGX  = rf'''
-                 ({COLORS_RGX})                 # Colors
+                 ({COLORS_RGX})                     # Colors
                  |
-                 ({ATTR_RGX})                   # Attributes
+                 ({ATTR_RGX})                       # Attributes
                  |
-                 ({RESET_RGX})                  # Reset all
+                 ({RESET_RGX})                      # Reset all
                  |
-                                                # Chars
+                 ({SPELL_MISS_RGX})
+                 |
+                                                    # Chars
              '''
 
 HAS_COLORS_RGX  = rf'{COLORS_RGX} | {ATTR_RGX}'
@@ -604,6 +609,11 @@ def preserve_colors(line, colorized_nicks_line):
     split_line    = [x for x in regex['split'].split(line)                 if x is not None and x]
     split_line_nc = [y for y in regex['split'].split(colorized_nicks_line) if y is not None and y]
 
+    # Since the spell plugin colorizes misspelled strings in the command-line, its
+    # end code must be replaced with reset color + keep attributes when the colorize_input
+    # option is set, otherwise it will colorize everything in the input.
+    split_line = [re.sub(rf'\A{SPELL_MISS_RGX}\Z', rf'{RES_KEEP_RGX}', z) if not None else z for z in split_line]
+
     # Debug split lists.
     #w.prnt('', f'split_line:'    + pp.pformat(split_line))
     #w.prnt('', f'split_line_nc:' + pp.pformat(split_line_nc))
@@ -631,7 +641,7 @@ def preserve_colors(line, colorized_nicks_line):
 
             color_codes = ''
             continue
-        elif split_line_nc[idx]:
+        elif 0 <= idx < len(split_line_nc):
             # It is a char, so compare it against the uncolored's char.
             if i == split_line_nc[idx]:
                 new_line += i
